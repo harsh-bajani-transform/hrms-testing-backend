@@ -2,8 +2,9 @@
 
 from flask import Blueprint, request
 from utils.response import api_response
-from config import get_db_connection, UPLOAD_SUBDIRS, BASE_UPLOAD_URL, UPLOAD_FOLDER
-from utils.file_utils import save_uploaded_file
+from config import get_db_connection
+from utils.cloudinary_utils import upload_to_cloudinary, delete_from_cloudinary, FOLDER_PROJECT
+from utils.file_utils import is_allowed_file
 import json
 import os
 from datetime import datetime
@@ -62,76 +63,42 @@ def _get_uploaded_files():
     return [f for f in files if f and f.filename]
 
 
-def safe_remove_project_file(filename: str) -> bool:
-    if not filename:
-        return False
-
-    filename = os.path.basename(str(filename))
-    proj_dir = os.path.abspath(os.path.join(UPLOAD_FOLDER, UPLOAD_SUBDIRS["PROJECT_PPRT"]))
-    abs_path = os.path.abspath(os.path.join(proj_dir, filename))
-
-    if os.path.commonpath([proj_dir, abs_path]) != proj_dir:
-        raise ValueError(f"Invalid file path: {abs_path}")
-
-    if os.path.exists(abs_path):
-        os.remove(abs_path)
-        return True
-    return False
-
-
-def safe_remove_project_files(file_list):
-    deleted = 0
+def safe_delete_cloudinary_project_files(file_list):
+    """Silently delete a list of Cloudinary URLs/public_ids."""
     for f in file_list or []:
         try:
-            if safe_remove_project_file(f):
-                deleted += 1
+            if f:
+                delete_from_cloudinary(f, resource_type="raw")
         except Exception as e:
-            print("DELETE FAILED:", e, "file=", f)
-    return deleted
+            print("Cloudinary project delete failed:", e, "file=", f)
 
 
 def parse_db_files(val):
     """
-    DB can contain:
-      - None
-      - "[]"
-      - '["a.pdf","b.xlsx"]'
-      - "a.pdf" (legacy)
+    DB stores a JSON array of Cloudinary URLs.
+    Returns a list of URL strings.
     """
     if not val:
         return []
 
     if isinstance(val, list):
-        return [os.path.basename(str(x)) for x in val if x]
+        return [str(x) for x in val if x]
 
     if isinstance(val, str):
         s = val.strip()
         if not s:
             return []
-
-        # legacy single filename
         if not (s.startswith("[") and s.endswith("]")):
-            return [os.path.basename(s)]
-
+            # legacy: single filename or URL
+            return [s] if s else []
         try:
             arr = json.loads(s)
             if isinstance(arr, list):
-                return [os.path.basename(str(x)) for x in arr if x]
+                return [str(x) for x in arr if x]
         except Exception:
             return []
 
     return []
-
-
-def get_public_upload_base():
-    # Absolute base: https://tfshrms.cloud + /python/uploads
-    return request.host_url.rstrip("/") + BASE_UPLOAD_URL
-
-
-def files_to_urls(files):
-    base = get_public_upload_base().rstrip("/")
-    sub = UPLOAD_SUBDIRS["PROJECT_PPRT"].strip("/")
-    return [f"{base}/{sub}/{fname}" for fname in (files or [])]
 
 
 # ---------------- CREATE PROJECT (multipart, multiple files) ---------------- #
@@ -155,19 +122,22 @@ def create_project():
     asst_project_manager_id = _get_form_json_list(form, "asst_project_manager_id")
     project_team_id = _get_form_json_list(form, "project_team_id")
     project_qa_id = _get_form_json_list(form, "project_qa_id")
-    # project_category_id = form.get("project_category_id")
+    project_category_id = form.get("project_category_id")
 
     uploaded_files = _get_uploaded_files()
 
-    saved_files = []
+    saved_urls = []
     try:
         total = len(uploaded_files)
         for idx, fs in enumerate(uploaded_files, start=1):
+            if not is_allowed_file(fs.filename):
+                raise ValueError(f"Unsupported file type: {fs.filename}")
             custom_name = build_project_filename(project_name, project_code, fs.filename, idx, total)
-            saved_name = save_uploaded_file(fs, UPLOAD_SUBDIRS["PROJECT_PPRT"], custom_name)
-            saved_files.append(saved_name)
+            url, _ = upload_to_cloudinary(fs, FOLDER_PROJECT, display_name=custom_name, resource_type="raw")
+            saved_urls.append(url)
     except Exception as e:
-        safe_remove_project_files(saved_files)
+        # cleanup already-uploaded files
+        safe_delete_cloudinary_project_files(saved_urls)
         return api_response(400, f"File handling failed: {str(e)}")
 
     conn = get_db_connection()
@@ -187,12 +157,12 @@ def create_project():
                 project_team_id,
                 project_qa_id,
                 project_pprt,
-                # project_category_id,
+                project_category_id,
                 created_date,
                 updated_date,
                 is_active
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
             """,
             (
                 project_name,
@@ -202,22 +172,22 @@ def create_project():
                 json.dumps(asst_project_manager_id),
                 json.dumps(project_team_id),
                 json.dumps(project_qa_id),
-                json.dumps(saved_files),   # ✅ store array*
-                # project_category_id,
+                json.dumps(saved_urls),   # ✅ store Cloudinary URLs
+                project_category_id,
                 now_str,
                 now_str,
             ),
         )
         conn.commit()
 
-        # ✅ return absolute URLs
+        # ✅ Cloudinary URLs are already absolute
         return api_response(201, "Project created successfully", {
-            "files": files_to_urls(saved_files)
+            "files": saved_urls
         })
 
     except Exception as e:
         conn.rollback()
-        safe_remove_project_files(saved_files)
+        safe_delete_cloudinary_project_files(saved_urls)
         return api_response(500, f"Project creation failed: {str(e)}")
     finally:
         cursor.close()
@@ -252,7 +222,7 @@ def update_project():
         update_values = {}
 
         # normal fields
-        for key in ["project_name", "project_code", "project_description", "project_manager_id"]:
+        for key in ["project_name", "project_code", "project_description", "project_manager_id", "project_category_id"]:
             if form.get(key) is not None:
                 v = form.get(key)
                 if key in ["project_name", "project_code"] and v is not None:
@@ -273,24 +243,28 @@ def update_project():
         clear_files = (form.get("clear_files") or "").strip().lower() in ("1", "true", "yes")
 
         if clear_files:
-            # delete old files + set DB to empty array
+            # delete old Cloudinary files + set DB to empty array
             old_files_to_delete = parse_db_files(existing.get("project_pprt"))
             update_values["project_pprt"] = json.dumps([])
 
         elif uploaded_files:
-            # replace with new uploaded files
+            # replace with new uploaded files (upload to Cloudinary first)
             old_files_to_delete = parse_db_files(existing.get("project_pprt"))
 
             use_project_name = update_values.get("project_name") or existing.get("project_name") or "PROJECT"
             use_project_code = update_values.get("project_code") or existing.get("project_code") or "CODE"
 
+            new_saved_urls = []
             total = len(uploaded_files)
             for idx, fs in enumerate(uploaded_files, start=1):
+                if not is_allowed_file(fs.filename):
+                    raise ValueError(f"Unsupported file type: {fs.filename}")
                 custom_name = build_project_filename(use_project_name, use_project_code, fs.filename, idx, total)
-                saved = save_uploaded_file(fs, UPLOAD_SUBDIRS["PROJECT_PPRT"], custom_name)
-                new_saved_files.append(saved)
+                url, _ = upload_to_cloudinary(fs, FOLDER_PROJECT, display_name=custom_name, resource_type="raw")
+                new_saved_urls.append(url)
 
-            update_values["project_pprt"] = json.dumps(new_saved_files)
+            new_saved_files = new_saved_urls
+            update_values["project_pprt"] = json.dumps(new_saved_urls)
 
         # if nothing to update
         if not update_values:
@@ -307,21 +281,21 @@ def update_project():
 
         conn.commit()
 
-        # ✅ delete old files only AFTER commit
+        # ✅ delete old Cloudinary files only AFTER commit
         if old_files_to_delete:
-            safe_remove_project_files(old_files_to_delete)
+            safe_delete_cloudinary_project_files(old_files_to_delete)
 
         # response
         if "project_pprt" in update_values:
             final_files = parse_db_files(update_values["project_pprt"])
-            return api_response(200, "Project updated successfully", {"files": files_to_urls(final_files)})
+            return api_response(200, "Project updated successfully", {"files": final_files})
 
         return api_response(200, "Project updated successfully")
 
     except Exception as e:
         conn.rollback()
-        # cleanup new saved files if update failed
-        safe_remove_project_files(new_saved_files)
+        # cleanup new Cloudinary uploads if update failed
+        safe_delete_cloudinary_project_files(new_saved_files)
         return api_response(500, f"Project update failed: {str(e)}")
 
     finally:
@@ -331,7 +305,7 @@ def update_project():
 
 # ---------------- DELETE PROJECT (soft delete + remove all files) ---------------- #
 
-@project_bp.route("/delete", methods=["PUT"])
+@project_bp.route("/delete", methods=["PUT","POST"])
 def delete_project():
     data = request.get_json(silent=True) or {}
     project_id = data.get("project_id")
@@ -362,8 +336,8 @@ def delete_project():
         )
         conn.commit()
 
-        # delete files after commit
-        safe_remove_project_files(old_files)
+        # delete Cloudinary files after commit
+        safe_delete_cloudinary_project_files(old_files)
 
         return api_response(200, "Project deleted successfully")
 
@@ -399,11 +373,13 @@ def list_projects():
 
         # ✅ Role-based project filtering
         base_query = """
-            SELECT project_id, project_name, project_code, project_description,
-                   project_team_id, project_manager_id, asst_project_manager_id, project_qa_id,
-                   project_pprt, project_category_id, created_date, updated_date
-            FROM project
-            WHERE is_active=1
+            SELECT p.project_id, p.project_name, p.project_code, p.project_description,
+                   p.project_team_id, p.project_manager_id, p.asst_project_manager_id, p.project_qa_id,
+                   p.project_pprt, p.project_category_id, pc.project_category_name,
+                   p.created_date, p.updated_date
+            FROM project p
+            LEFT JOIN project_category pc ON pc.project_category_id = p.project_category_id AND pc.is_active = 1
+            WHERE p.is_active=1
         """
         params = []
 
@@ -414,10 +390,10 @@ def list_projects():
             # Project manager sees projects they manage
             base_query += """
                 AND (
-                    TRIM(COALESCE(project_manager_id, '')) = %s
+                    TRIM(COALESCE(p.project_manager_id, '')) = %s
                     OR FIND_IN_SET(
                         %s,
-                        REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(project_manager_id,''), '[',''), ']',''), '"',''), ' ', '')
+                        REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(p.project_manager_id,''), '[',''), ']',''), '"',''), ' ', '')
                     ) > 0
                 )
             """
@@ -426,10 +402,10 @@ def list_projects():
             # Assistant manager sees projects where they are asst_project_manager
             base_query += """
                 AND (
-                    TRIM(COALESCE(asst_project_manager_id, '')) = %s
+                    TRIM(COALESCE(p.asst_project_manager_id, '')) = %s
                     OR FIND_IN_SET(
                         %s,
-                        REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(asst_project_manager_id,''), '[',''), ']',''), '"',''), ' ', '')
+                        REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(p.asst_project_manager_id,''), '[',''), ']',''), '"',''), ' ', '')
                     ) > 0
                 )
             """
@@ -438,10 +414,10 @@ def list_projects():
             # QA sees projects where they are project_qa
             base_query += """
                 AND (
-                    TRIM(COALESCE(project_qa_id, '')) = %s
+                    TRIM(COALESCE(p.project_qa_id, '')) = %s
                     OR FIND_IN_SET(
                         %s,
-                        REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(project_qa_id,''), '[',''), ']',''), '"',''), ' ', '')
+                        REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(p.project_qa_id,''), '[',''), ']',''), '"',''), ' ', '')
                     ) > 0
                 )
             """
@@ -450,16 +426,16 @@ def list_projects():
             # Agent sees projects where they are in project_team
             base_query += """
                 AND (
-                    TRIM(COALESCE(project_team_id, '')) = %s
+                    TRIM(COALESCE(p.project_team_id, '')) = %s
                     OR FIND_IN_SET(
                         %s,
-                        REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(project_team_id,''), '[',''), ']',''), '"',''), ' ', '')
+                        REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(p.project_team_id,''), '[',''), ']',''), '"',''), ' ', '')
                     ) > 0
                 )
             """
             params.extend([str(logged_in_user_id), str(logged_in_user_id)])
 
-        base_query += " ORDER BY project_id DESC"
+        base_query += " ORDER BY p.project_id DESC"
 
         cursor.execute(base_query, tuple(params))
         projects = cursor.fetchall()
@@ -467,8 +443,8 @@ def list_projects():
         result = []
         for proj in projects:
 
-            files = parse_db_files(proj.get("project_pprt"))
-            project_files = files_to_urls(files)  # ✅ absolute array links
+            files = parse_db_files(proj.get("project_pprt"))  # returns Cloudinary URLs
+            project_files = files  # already absolute Cloudinary URLs
 
             result.append({
                 "project_id": proj["project_id"],
@@ -480,7 +456,7 @@ def list_projects():
                 "asst_project_manager_id": json.loads(proj.get("asst_project_manager_id") or "[]"),
                 "project_qa_id": json.loads(proj.get("project_qa_id") or "[]"),
                 "project_category_id": proj.get("project_category_id"),
-                # "project_category": proj["project_category"],
+                "project_category_name": proj.get("project_category_name"),
                 "project_files": project_files,
                 "created_date": proj["created_date"],
                 "updated_date": proj["updated_date"],

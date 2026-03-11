@@ -230,6 +230,10 @@ def list_users():
             params.append(str(int(user_id)))   # exact match
             params.append(str(int(user_id)))   # FIND_IN_SET
 
+        if data.get("is_active") is not None:
+            query += " AND u.is_active = %s"
+            params.append(data.get("is_active"))
+
         query += " ORDER BY u.user_id DESC"
 
         cursor.execute(query, tuple(params))
@@ -360,7 +364,6 @@ def update_user():
                 print("DELETE FAILED (user update):", e, "old_file=", old_profile_file)
 
             user_fields["profile_picture"] = new_filename
-            user_fields["profile_picture_base64"] = None  # clear base64 if column exists
 
         # build update
         for col, val in user_fields.items():
@@ -423,6 +426,7 @@ def delete_user():
 
         cursor.execute("""
             UPDATE tfs_user
+            
             SET is_delete = 0, is_active = 0
             WHERE user_id = %s
         """, (user_id,))

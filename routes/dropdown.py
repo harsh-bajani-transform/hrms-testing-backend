@@ -192,25 +192,101 @@ def get():
                         item["label"] = item["label"].title()
                 return api_response(200, "Dropdown data fetched successfully", result)
             elif dropdown_type == "agent":
-                # Return all agents
-                query = """
-                    SELECT
-                        u.user_id,
-                        u.user_name AS label
-                    FROM tfs_user u
-                    JOIN user_role r ON r.role_id = u.role_id
-                    WHERE u.is_active = 1
-                      AND u.is_delete = 1
-                      AND r.is_active = 1
-                      AND LOWER(r.role_name) = %s
-                    ORDER BY u.user_name
-                """
-                params = (dropdown_type,)
+
+                logged_in_user_id = data.get("logged_in_user_id")
+                team_id = data.get("team_id")
+                clean_team = "REPLACE(REPLACE(REPLACE(REPLACE(u.team_id,'[',''),']',''), '\"',''),' ','')"
+
+                if not logged_in_user_id:
+                    return api_response(400, "logged_in_user_id is required")
+
+                user_role = get_user_role(cursor, logged_in_user_id)
+
+                clean_pm = "REPLACE(REPLACE(REPLACE(REPLACE(u.project_manager_id,'[',''),']',''), '\"',''),' ','')"
+                clean_am = "REPLACE(REPLACE(REPLACE(REPLACE(u.asst_manager_id,'[',''),']',''), '\"',''),' ','')"
+                clean_qa = "REPLACE(REPLACE(REPLACE(REPLACE(u.qa_id,'[',''),']',''), '\"',''),' ','')"
+
+                # ---------------- ADMIN / SUPER ADMIN ---------------- #
+                if user_role in ["admin", "super admin"]:
+                    query = f"""
+                        SELECT u.user_id, u.user_name AS label
+                        FROM tfs_user u
+                        JOIN user_role r ON r.role_id = u.role_id
+                        WHERE u.is_active = 1
+                        AND u.is_delete = 1
+                        AND r.is_active = 1
+                        AND LOWER(r.role_name) = 'agent'
+                    """
+
+                    params = []
+
+                    if team_id:
+                        query += f" AND FIND_IN_SET(%s, {clean_team})"
+                        params.append(team_id)
+
+                    query += " ORDER BY u.user_name"
+
+                # ---------------- PROJECT MANAGER ---------------- #
+                elif user_role in ["project manager", "manager"]:
+                    query = f"""
+                        SELECT u.user_id, u.user_name AS label
+                        FROM tfs_user u
+                        JOIN user_role r ON r.role_id = u.role_id
+                        WHERE u.is_active = 1
+                        AND u.is_delete = 1
+                        AND r.is_active = 1
+                        AND LOWER(r.role_name) = 'agent'
+                        AND FIND_IN_SET(%s, {clean_pm})
+                    """
+
+                    params = [logged_in_user_id]
+
+                    if team_id:
+                        query += f" AND FIND_IN_SET(%s, {clean_team})"
+                        params.append(team_id)
+
+                    query += " ORDER BY u.user_name"
+
+                # ---------------- ASSISTANT MANAGER ---------------- #
+                elif user_role == "assistant manager":
+                    query = f"""
+                        SELECT u.user_id, u.user_name AS label
+                        FROM tfs_user u
+                        JOIN user_role r ON r.role_id = u.role_id
+                        WHERE u.is_active = 1
+                        AND u.is_delete = 1
+                        AND r.is_active = 1
+                        AND LOWER(r.role_name) = 'agent'
+                        AND FIND_IN_SET(%s, {clean_am})
+                        ORDER BY u.user_name
+                    """
+                    params = (logged_in_user_id,)
+
+                # ---------------- QA ---------------- #
+                elif user_role == "qa":
+                    query = f"""
+                        SELECT u.user_id, u.user_name AS label
+                        FROM tfs_user u
+                        JOIN user_role r ON r.role_id = u.role_id
+                        WHERE u.is_active = 1
+                        AND u.is_delete = 1
+                        AND r.is_active = 1
+                        AND LOWER(r.role_name) = 'agent'
+                        AND FIND_IN_SET(%s, {clean_qa})
+                        ORDER BY u.user_name
+                    """
+                    params = (logged_in_user_id,)
+
+                else:
+                    return api_response(403, "Not allowed")
+
                 cursor.execute(query, params)
                 result = cursor.fetchall()
+
                 for item in result:
                     if item.get("label"):
                         item["label"] = item["label"].title()
+
                 return api_response(200, "Dropdown data fetched successfully", result)
             else:
                 # All other roles

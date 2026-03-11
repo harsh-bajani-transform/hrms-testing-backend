@@ -1,15 +1,13 @@
 from flask import Blueprint, request
-from config import get_db_connection, BASE_UPLOAD_URL, UPLOAD_SUBDIRS, UPLOAD_FOLDER
+from config import get_db_connection
 from utils.response import api_response
-from utils.file_utils import save_base64_file  # kept (not used now in update)
 from utils.api_log_utils import log_api_call
+from utils.cloudinary_utils import upload_to_cloudinary, delete_from_cloudinary, FOLDER_TRACKER
 from datetime import datetime, timedelta
 import re
 import os
 
 tracker_bp = Blueprint("tracker", __name__)
-
-UPLOAD_URL_PREFIX = "/uploads"
 
 
 # ------------------------
@@ -95,56 +93,17 @@ def build_tracker_filename(project_code: str, task_name: str, user_name: str, or
     )
 
 
-def get_tracker_file_path(filename: str) -> str:
-    # physical path for tracker file
-    return os.path.join(UPLOAD_FOLDER, UPLOAD_SUBDIRS["TRACKER_FILES"], filename)
-
-def safe_remove_tracker_file(filename: str) -> bool:
+def safe_delete_cloudinary_tracker(url_or_public_id: str) -> None:
     """
-    Deletes file from tracker_files folder if exists.
-    Returns True if deleted, False if not found / nothing deleted.
+    Silently delete a tracker file from Cloudinary.
+    Errors are logged but never surface to the caller.
     """
-    if not filename:
-        return False
-
-    file_path = get_tracker_file_path(filename)
-
-    # Safety: ensure deletion stays inside tracker_files directory
-    tracker_dir = os.path.abspath(os.path.join(UPLOAD_FOLDER, UPLOAD_SUBDIRS["TRACKER_FILES"]))
-    abs_path = os.path.abspath(file_path)
-    if not abs_path.startswith(tracker_dir + os.sep):
-        # prevents path traversal like ../../something
-        raise ValueError("Invalid file path")
-    print("Deleting file at:", abs_path)
-    if os.path.exists(abs_path):
-        os.remove(abs_path)
-        return True
-
-    return False
-
-def safe_remove_tracker_file(filename: str) -> bool:
-    """
-    Deletes file from uploads/<TRACKER_FILES>/ if exists.
-    Works even if DB stored a URL/path (we basename it).
-    """
-    if not filename:
-        return False
-
-    # ✅ normalize in case DB stored URL/path
-    filename = os.path.basename(str(filename))
-
-    tracker_dir = os.path.abspath(os.path.join(UPLOAD_FOLDER, UPLOAD_SUBDIRS["TRACKER_FILES"]))
-    abs_path = os.path.abspath(os.path.join(tracker_dir, filename))
-
-    # ✅ safety: ensure deletion stays inside tracker_dir
-    if not abs_path.startswith(tracker_dir + os.sep):
-        raise ValueError(f"Invalid file path: {abs_path}")
-
-    if os.path.exists(abs_path):
-        os.remove(abs_path)
-        return True
-
-    return False
+    if not url_or_public_id:
+        return
+    try:
+        delete_from_cloudinary(url_or_public_id, resource_type="raw")
+    except Exception as e:
+        print(f"Cloudinary tracker delete failed: {e} | ref={url_or_public_id}")
 
 # ------------------------
 # ADD TRACKER  (multipart + custom filename)
@@ -197,23 +156,28 @@ def add_tracker():
         usr_row = cursor.fetchone() or {}
         user_name = usr_row.get("user_name") or "USER"
 
-        # ✅ file save (multipart)
+        # ✅ file upload to Cloudinary
         tracker_file = None
         uploaded = request.files.get("tracker_file")
         if uploaded and uploaded.filename:
             try:
-                from utils.file_utils import save_uploaded_file  # generic
                 custom_name = build_tracker_filename(project_code, task_name, user_name, uploaded.filename)
-                tracker_file = save_uploaded_file(uploaded, UPLOAD_SUBDIRS["TRACKER_FILES"], custom_name)
+                # public_id includes extension (raw resource)
+                cloudinary_url, _ = upload_to_cloudinary(
+                    uploaded, FOLDER_TRACKER, display_name=custom_name, resource_type="raw"
+                )
+                tracker_file = cloudinary_url
             except ValueError as e:
                 return api_response(400, str(e))
+            except Exception as e:
+                return api_response(500, f"File upload failed: {str(e)}")
 
         # now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if now_str is None:
             print("Received date:", now_str)
             now = datetime.now()
-            # If NIGHT shift and time is between 00:00–06:00
-            if shift == "NIGHT" and now.hour < 6:
+            # If NIGHT shift and time is between 00:00–09:00
+            if shift == "NIGHT" and now.hour < 9:
                 adjusted_datetime = now - timedelta(days=1)
             else:
                 adjusted_datetime = now
@@ -256,7 +220,7 @@ def add_tracker():
 # ------------------------
 # UPDATE TRACKER (multipart + optional file replace + custom filename)
 # ------------------------
-@tracker_bp.route("/update", methods=["POST"])
+@tracker_bp.route("/update", methods=["POST","PUT"])
 def update_tracker():
     form = request.form
     tracker_id = form.get("tracker_id")
@@ -280,6 +244,8 @@ def update_tracker():
         # update numeric fields (optional)
         production = float(form.get("production", tracker["production"]))
         base_target = float(form.get("base_target", tracker["actual_target"]))
+        date_time = form.get("date_time", tracker["date_time"])
+        print(date_time)
 
         # tenure + user_name
         cursor.execute("SELECT user_tenure, user_name FROM tfs_user WHERE user_id=%s", (tracker["user_id"],))
@@ -314,36 +280,27 @@ def update_tracker():
 
             custom_filename = build_tracker_filename(project_code, task_name, user_name, uploaded.filename)
 
-            from utils.file_utils import save_uploaded_file
+            # ✅ Upload new file to Cloudinary first
+            cloudinary_url, _ = upload_to_cloudinary(
+                uploaded, FOLDER_TRACKER, display_name=custom_filename, resource_type="raw"
+            )
+            new_file_saved = cloudinary_url
 
-            # ✅ Save new file first
-            new_file = save_uploaded_file(uploaded, UPLOAD_SUBDIRS["TRACKER_FILES"], custom_filename)
-            new_file_saved = new_file
+            # ✅ Delete old Cloudinary file (only if it differs)
+            if old_file and old_file != cloudinary_url:
+                safe_delete_cloudinary_tracker(old_file)
 
-            # ✅ Delete old file (only if old exists AND not same)
-            try:
-                if old_file:
-                    old_file_norm = os.path.basename(str(old_file))
-                else:
-                    old_file_norm = None
-
-                if old_file_norm and old_file_norm != new_file:
-                    safe_remove_tracker_file(old_file_norm)
-            except Exception as e:
-                # DO NOT fail update if old deletion fails, but don't hide it
-                print("DELETE FAILED (update):", str(e), " old_file=", old_file)
-
-            tracker_file = new_file
+            tracker_file = cloudinary_url
 
         # updated_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         now = datetime.now()
-        if shift == "NIGHT" and now.hour < 6:
-            adjusted_datetime = now - timedelta(days=1)
-        else:
-            adjusted_datetime = now
+        # if shift == "NIGHT" and now.hour < 6:
+        #     adjusted_datetime = now - timedelta(days=1)
+        # else:
+        #     adjusted_datetime = now
 
         updated_date = now.strftime("%Y-%m-%d %H:%M:%S")
-        date_time = adjusted_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        # date_time = adjusted_datetime.strftime("%Y-%m-%d %H:%M:%S")
         
         tracker_note = form.get("tracker_note", tracker.get("tracker_note"))  # optional, keep existing if not provided
 
@@ -391,21 +348,15 @@ def update_tracker():
 
     except ValueError as e:
         conn.rollback()
-        # rollback: if file was saved but DB update failed, remove newly saved file
+        # rollback: if Cloudinary upload succeeded but DB failed, delete newly uploaded file
         if new_file_saved:
-            try:
-                safe_remove_tracker_file(new_file_saved)
-            except Exception:
-                pass
+            safe_delete_cloudinary_tracker(new_file_saved)
         return api_response(400, str(e))
 
     except Exception as e:
         conn.rollback()
         if new_file_saved:
-            try:
-                safe_remove_tracker_file(new_file_saved)
-            except Exception:
-                pass
+            safe_delete_cloudinary_tracker(new_file_saved)
         return api_response(500, f"Failed to update tracker: {str(e)}")
 
     finally:
@@ -442,15 +393,8 @@ def delete_tracker():
         )
         conn.commit()
 
-        # ✅ delete physical file
-        try:
-            f = tracker.get("tracker_file")
-            if f:
-                f = os.path.basename(str(f))
-            if f:
-                safe_remove_tracker_file(f)
-        except Exception as e:
-            print("DELETE FAILED (delete api):", str(e), " file=", tracker.get("tracker_file"))
+        # ✅ delete from Cloudinary
+        safe_delete_cloudinary_tracker(tracker.get("tracker_file"))
 
         device_id = data.get("device_id")
         device_type = data.get("device_type")
@@ -468,10 +412,11 @@ def delete_tracker():
         conn.close()
 
 # ------------------------
-# VIEW TRACKERS (your existing logic + month_year normalization + robust manager matching)
+# VIEW TRACKERS (with totals)
 # ------------------------
 @tracker_bp.route("/view", methods=["POST"])
 def view_trackers():
+    print("====== INSIDE /tracker/view ======")
     data = request.get_json() or {}
 
     conn = get_db_connection()
@@ -484,8 +429,19 @@ def view_trackers():
         if not logged_in_user_id:
             return api_response(400, "logged_in_user_id is required")
 
-        # month_year default current month
-        month_year = normalize_month_year(data.get("month_year"))
+        # ---------- Smart Month Detection ----------
+        month_year = None
+        if data.get("date_from") or data.get("date_to"):
+            try:
+                ref_date = data.get("date_to") or data.get("date_from")
+                dt_obj = datetime.strptime(str(ref_date)[:10], "%Y-%m-%d")
+                month_year = dt_obj.strftime("%b%Y")
+            except Exception:
+                month_year = None
+
+        if not month_year:
+            month_year = normalize_month_year(data.get("month_year"))
+
         if not month_year:
             cursor.execute("SELECT DATE_FORMAT(CURDATE(), '%b%Y') AS m")
             month_year = normalize_month_year((cursor.fetchone() or {}).get("m") or "")
@@ -493,23 +449,26 @@ def view_trackers():
         ctx = get_role_context(cursor, int(logged_in_user_id))
         role_name = ctx["user_role_name"]
 
+        # -----------------------------
+        # Main Tracker Query
+        # -----------------------------
         query = """
-            SELECT 
-                twt.*,
-                u.user_name,
-                p.project_name,
-                tk.task_name,
-                t.team_name,
-                (twt.production / NULLIF(twt.tenure_target, 0)) AS billable_hours
-            FROM task_work_tracker twt
-            LEFT JOIN tfs_user u ON u.user_id = twt.user_id
-            LEFT JOIN project p ON p.project_id = twt.project_id
-            LEFT JOIN task tk ON tk.task_id = twt.task_id
-            LEFT JOIN team t ON u.team_id = t.team_id
-            WHERE twt.is_active != 0
+        SELECT 
+            twt.*, u.user_name, u.user_email,
+            am.user_id AS assistant_manager_id, am.user_name AS assistant_manager_name, am.user_email AS assistant_manager_email,
+            p.project_id, p.project_name, p.project_category_id,
+            tk.task_name, t.team_name,
+            (twt.production / NULLIF(twt.tenure_target, 0)) AS billable_hours
+        FROM task_work_tracker twt
+        LEFT JOIN tfs_user u ON u.user_id = twt.user_id
+        LEFT JOIN tfs_user am ON (u.asst_manager_id = am.user_id OR JSON_CONTAINS(u.asst_manager_id, CONCAT('[', am.user_id, ']')))
+        LEFT JOIN project p ON p.project_id = twt.project_id
+        LEFT JOIN task tk ON tk.task_id = twt.task_id
+        LEFT JOIN team t ON u.team_id = t.team_id
+        WHERE twt.is_active != 0
         """
 
-        # month filter
+        # Month filter
         try:
             dt = datetime.strptime(month_year, "%b%Y")
             query += " AND YEAR(CAST(twt.date_time AS DATETIME)) = %s AND MONTH(CAST(twt.date_time AS DATETIME)) = %s"
@@ -517,192 +476,135 @@ def view_trackers():
         except Exception:
             pass
 
+        # Dynamic filters
         if data.get("team_id"):
             query += " AND u.team_id=%s"
             params.append(data["team_id"])
-
         if data.get("user_id"):
-            query += " AND twt.user_id=%s"
-            params.append(data["user_id"])
-        else:
-            if role_name in ("admin", "super admin"):
-                pass
-            else:
-                manager_id_str = str(logged_in_user_id)
-                query += f"""
-                    AND twt.user_id IN (
-                        SELECT tu.user_id
-                        FROM tfs_user tu
-                        WHERE tu.is_active = 1
-                          AND tu.is_delete = 1
-                          AND (
-                                tu.project_manager_id = %s
-                                OR tu.asst_manager_id = %s
-                                OR tu.qa_id = %s
-                                OR tu.user_id = %s
-                                OR FIND_IN_SET(%s, {cleaned_csv_col("tu.project_manager_id")}) > 0
-                                OR FIND_IN_SET(%s, {cleaned_csv_col("tu.asst_manager_id")}) > 0
-                                OR FIND_IN_SET(%s, {cleaned_csv_col("tu.qa_id")}) > 0
-                          )
-                    )
-                """
-                params.extend([manager_id_str] * 7)
+            user_ids_filter = data["user_id"]
 
+            # if single value convert to list
+            if not isinstance(user_ids_filter, list):
+                user_ids_filter = [user_ids_filter]
+
+            placeholders = ",".join(["%s"] * len(user_ids_filter))
+            query += f" AND twt.user_id IN ({placeholders})"
+
+            params.extend(user_ids_filter)
+        elif role_name not in ("admin", "super admin"):
+            manager_id_str = str(logged_in_user_id)
+            query += """
+                AND twt.user_id IN (
+                    SELECT tu.user_id
+                    FROM tfs_user tu
+                    WHERE tu.is_active = 1 AND tu.is_delete = 1
+                    AND (
+                        tu.project_manager_id=%s OR tu.asst_manager_id=%s OR tu.qa_id=%s
+                        OR tu.user_id=%s
+                        OR JSON_CONTAINS(tu.project_manager_id, JSON_ARRAY(%s))
+                        OR JSON_CONTAINS(tu.asst_manager_id, JSON_ARRAY(%s))
+                        OR JSON_CONTAINS(tu.qa_id, JSON_ARRAY(%s))
+                    )
+                )
+            """
+            params.extend([manager_id_str]*7)
         if data.get("project_id"):
             query += " AND twt.project_id=%s"
             params.append(data["project_id"])
-
         if data.get("task_id"):
             query += " AND twt.task_id=%s"
             params.append(data["task_id"])
-            
         if data.get("shift"):
-            query += " AND twt.shift = %s"
+            query += " AND twt.shift=%s"
             params.append(data["shift"].upper())
-
         if data.get("date_from"):
-            date_from = data["date_from"]
-            if len(date_from) == 10:
-                date_from += " 00:00:00"
+            df = data["date_from"]
+            if len(df) == 10: df += " 00:00:00"
             query += " AND CAST(twt.date_time AS DATETIME) >= %s"
-            params.append(date_from)
-
+            params.append(df)   
         if data.get("date_to"):
-            date_to = data["date_to"]
-            if len(date_to) == 10:
-                date_to += " 23:59:59"
+            dt_ = data["date_to"]
+            if len(dt_) == 10: dt_ += " 23:59:59"
             query += " AND CAST(twt.date_time AS DATETIME) <= %s"
-            params.append(date_to)
-
+            params.append(dt_)
         if data.get("is_active") is not None:
             query += " AND twt.is_active=%s"
             params.append(data["is_active"])
+        if data.get("qc_pending") is not None:
+            query += " AND twt.qc_status = %s"
+            params.append(data["qc_pending"])
+
+            # ensure tracker file exists
+            query += " AND twt.tracker_file IS NOT NULL AND twt.tracker_file != ''"
 
         query += " ORDER BY CAST(twt.date_time AS DATETIME) DESC"
-
         cursor.execute(query, tuple(params))
         trackers = cursor.fetchall()
 
-        tracker_files_url = f"{BASE_UPLOAD_URL}/{UPLOAD_SUBDIRS['TRACKER_FILES']}/"
+        # Normalize tracker_file
         for t in trackers:
-            tracker_file_temp = t.get("tracker_file")
-            t["tracker_file"] = (tracker_files_url + tracker_file_temp) if tracker_file_temp else None
+            if not t.get("tracker_file"):
+                t["tracker_file"] = None
 
-        # Month-wise summary (your logic, but month_year is normalized now)
-        user_ids = sorted({t.get("user_id") for t in trackers if t.get("user_id") is not None})
+        # -----------------------------
+        # Month Summary
+        # -----------------------------
         month_summary = []
-
+        user_ids = sorted({t["user_id"] for t in trackers if t.get("user_id")})
         if user_ids:
-            in_ph = ",".join(["%s"] * len(user_ids))
-
+            in_ph = ",".join(["%s"]*len(user_ids))
             summary_query = f"""
-                SELECT
-                    u.user_id,
-                    u.user_name,
-                    m.mon AS month_year,
-                    umt.user_monthly_tracker_id,
-                    COALESCE(CAST(umt.monthly_target AS DECIMAL(10,2)), 0) AS monthly_target,
-                    COALESCE(umt.extra_assigned_hours, 0) AS extra_assigned_hours,
-                    (
-                      COALESCE(CAST(umt.monthly_target AS DECIMAL(10,2)), 0)
-                      + COALESCE(umt.extra_assigned_hours, 0)
-                    ) AS monthly_total_target,
-                    COALESCE((
-                      SELECT SUM(twt3.production / NULLIF(twt3.tenure_target, 0))
-                      FROM task_work_tracker twt3
-                      WHERE twt3.user_id = u.user_id
-                        AND twt3.is_active = 1
-                        AND (YEAR(CAST(twt3.date_time AS DATETIME))*100 + MONTH(CAST(twt3.date_time AS DATETIME))) = m.yyyymm
-                    ), 0) AS total_billable_hours_month,
-                    CASE
-                      WHEN umt.user_monthly_tracker_id IS NULL THEN NULL
-                      ELSE GREATEST(
-                             COALESCE(CAST(umt.working_days AS SIGNED), 0)
-                             - COALESCE((
-                                 SELECT COUNT(DISTINCT DATE(CAST(twt2.date_time AS DATETIME)))
-                                 FROM task_work_tracker twt2
-                                 WHERE twt2.user_id = u.user_id
-                                   AND twt2.is_active = 1
-                                   AND (YEAR(CAST(twt2.date_time AS DATETIME))*100 + MONTH(CAST(twt2.date_time AS DATETIME))) = m.yyyymm
-                                   AND DATE(CAST(twt2.date_time AS DATETIME)) <= m.cutoff
-                               ), 0),
-                             0
-                           )
-                    END AS pending_days,
-                    CASE
-                      WHEN umt.user_monthly_tracker_id IS NULL THEN NULL
-                      WHEN GREATEST(
-                             COALESCE(CAST(umt.working_days AS SIGNED), 0)
-                             - COALESCE((
-                                 SELECT COUNT(DISTINCT DATE(CAST(twt2.date_time AS DATETIME)))
-                                 FROM task_work_tracker twt2
-                                 WHERE twt2.user_id = u.user_id
-                                   AND twt2.is_active = 1
-                                   AND (YEAR(CAST(twt2.date_time AS DATETIME))*100 + MONTH(CAST(twt2.date_time AS DATETIME))) = m.yyyymm
-                                   AND DATE(CAST(twt2.date_time AS DATETIME)) <= m.cutoff
-                               ), 0),
-                             0
-                           ) = 0 THEN NULL
-                      ELSE
-                        (
-                          (
-                            COALESCE(CAST(umt.monthly_target AS DECIMAL(10,2)), 0)
-                            + COALESCE(umt.extra_assigned_hours, 0)
-                          )
-                          - COALESCE((
-                              SELECT SUM(twt3.production / NULLIF(twt3.tenure_target, 0))
-                              FROM task_work_tracker twt3
-                              WHERE twt3.user_id = u.user_id
-                                AND twt3.is_active = 1
-                                AND (YEAR(CAST(twt3.date_time AS DATETIME))*100 + MONTH(CAST(twt3.date_time AS DATETIME))) = m.yyyymm
-                            ), 0)
-                        )
-                        / NULLIF(
-                            GREATEST(
-                              COALESCE(CAST(umt.working_days AS SIGNED), 0)
-                              - COALESCE((
-                                  SELECT COUNT(DISTINCT DATE(CAST(twt2.date_time AS DATETIME)))
-                                  FROM task_work_tracker twt2
-                                  WHERE twt2.user_id = u.user_id
-                                    AND twt2.is_active = 1
-                                    AND (YEAR(CAST(twt2.date_time AS DATETIME))*100 + MONTH(CAST(twt2.date_time AS DATETIME))) = m.yyyymm
-                                    AND DATE(CAST(twt2.date_time AS DATETIME)) <= m.cutoff
-                                ), 0),
-                              0
-                            ),
-                            0
-                          )
-                    END AS daily_required_hours
+                SELECT u.user_id, u.user_name, u.user_email, m.mon AS month_year,
+                       umt.user_monthly_tracker_id,
+                       COALESCE(CAST(umt.monthly_target AS DECIMAL(10,2)),0) AS monthly_target,
+                       COALESCE(umt.extra_assigned_hours,0) AS extra_assigned_hours,
+                       (COALESCE(CAST(umt.monthly_target AS DECIMAL(10,2)),0)+COALESCE(umt.extra_assigned_hours,0)) AS monthly_total_target
                 FROM tfs_user u
-                CROSS JOIN (
-                    SELECT
-                      %s AS mon,
-                      CAST(DATE_FORMAT(STR_TO_DATE(CONCAT('01-', %s), '%d-%b%Y'), '%Y%m') AS UNSIGNED) AS yyyymm,
-                      CASE
-                        WHEN (YEAR(CURDATE())*100 + MONTH(CURDATE())) =
-                             CAST(DATE_FORMAT(STR_TO_DATE(CONCAT('01-', %s), '%d-%b%Y'), '%Y%m') AS UNSIGNED)
-                        THEN CURDATE()
-                        WHEN (YEAR(CURDATE())*100 + MONTH(CURDATE())) >
-                             CAST(DATE_FORMAT(STR_TO_DATE(CONCAT('01-', %s), '%d-%b%Y'), '%Y%m') AS UNSIGNED)
-                        THEN LAST_DAY(STR_TO_DATE(CONCAT('01-', %s), '%d-%b%Y'))
-                        ELSE DATE_SUB(STR_TO_DATE(CONCAT('01-', %s), '%d-%b%Y'), INTERVAL 1 DAY)
-                      END AS cutoff
-                ) m
+                CROSS JOIN (SELECT %s AS mon) m
                 LEFT JOIN user_monthly_tracker umt
-                  ON umt.user_id = u.user_id
-                 AND umt.is_active = 1
-                 AND umt.month_year = m.mon
+                    ON umt.user_id=u.user_id AND umt.is_active=1 AND umt.month_year=m.mon
                 WHERE u.user_id IN ({in_ph})
             """
-
-            summary_params = [month_year] * 6 + user_ids
+            summary_params = [month_year] + user_ids
             cursor.execute(summary_query, tuple(summary_params))
             month_summary = cursor.fetchall()
 
-            device_id = data.get("device_id")
-            device_type = data.get("device_type")
-            api_call_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log_api_call("view_trackers", logged_in_user_id, device_id, device_type, api_call_time)
+        # -----------------------------
+        # Totals
+        # -----------------------------
+        # Total assigned hours from temp_qc
+        assigned_query = "SELECT COALESCE(SUM(assigned_hours),0) AS total_assigned FROM temp_qc WHERE 1=1"
+        assigned_params = []
+
+        if user_ids:
+            in_ph = ",".join(["%s"]*len(user_ids))
+            assigned_query += f" AND user_id IN ({in_ph})"
+            assigned_params.extend(user_ids)
+
+        if data.get("date_from") and data.get("date_to"):
+            assigned_query += " AND DATE(date) BETWEEN %s AND %s"
+            assigned_params.extend([data["date_from"], data["date_to"]])
+
+        cursor.execute(assigned_query, tuple(assigned_params))
+        total_assigned_hours = float((cursor.fetchone() or {}).get("total_assigned") or 0)
+
+        
+        totals = {
+            "total_tenure_target": round(sum(float(t.get("tenure_target") or 0) for t in trackers), 2),
+
+            "total_billable_hours": round(sum(float(t.get("billable_hours") or 0) for t in trackers), 2),
+
+            "total_production": round(sum(float(t.get("production") or 0) for t in trackers), 2),
+
+            "total_assigned_hours": round(total_assigned_hours, 2),
+
+            "total_active_agents": len(set(t["user_id"] for t in trackers if t.get("user_id")))
+        }
+
+        # -----------------------------
+        # Log API call
+        # -----------------------------
+        log_api_call("view_trackers", logged_in_user_id, data.get("device_id"), data.get("device_type"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
         return api_response(
             200,
@@ -712,7 +614,8 @@ def view_trackers():
                 "month_year": month_year,
                 "trackers": trackers,
                 "month_summary": month_summary,
-            },
+                "totals": totals
+            }
         )
 
     except Exception as e:
@@ -766,11 +669,34 @@ def view_daily_trackers():
             return api_response(400, "logged_in_user_id is required")
 
         # -------- Month (case-insensitive, same behavior as /view)
-        month_year = normalize_month_year(data.get("month_year"))
+        # month_year = normalize_month_year(data.get("month_year"))
+        # if not month_year:
+        #     cursor.execute("SELECT DATE_FORMAT(CURDATE(), '%b%Y') AS m")
+        #     month_year = normalize_month_year((cursor.fetchone() or {}).get("m") or "")
+
+        # ---------- Smart Month Detection ----------
+        month_year = None
+
+        # 1️⃣ If date filter exists → derive month from date_to OR date_from
+        if data.get("date_from") or data.get("date_to"):
+            try:
+                ref_date = data.get("date_to") or data.get("date_from")
+                ref_date = str(ref_date)[:10]  # ensure YYYY-MM-DD
+                dt_obj = datetime.strptime(ref_date, "%Y-%m-%d")
+                month_year = dt_obj.strftime("%b%Y")
+            except Exception:
+                month_year = None
+
+        # 2️⃣ Else use explicit month_year
+        if not month_year:
+            month_year = normalize_month_year(data.get("month_year"))
+
+        # 3️⃣ Else fallback to current month
         if not month_year:
             cursor.execute("SELECT DATE_FORMAT(CURDATE(), '%b%Y') AS m")
             month_year = normalize_month_year((cursor.fetchone() or {}).get("m") or "")
-
+        
+        
         # -------- Role check
         cursor.execute(
             """
@@ -850,9 +776,9 @@ def view_daily_trackers():
                                 OR tu.asst_manager_id = %s
                                 OR tu.qa_id = %s
                                 OR tu.user_id = %s
-                                OR FIND_IN_SET(%s, {cleaned_csv_col("tu.project_manager_id")}) > 0
-                                OR FIND_IN_SET(%s, {cleaned_csv_col("tu.asst_manager_id")}) > 0
-                                OR FIND_IN_SET(%s, {cleaned_csv_col("tu.qa_id")}) > 0
+                                OR JSON_CONTAINS(tu.project_manager_id, JSON_ARRAY(%s))
+                                OR JSON_CONTAINS(tu.asst_manager_id, JSON_ARRAY(%s))
+                                OR JSON_CONTAINS(tu.qa_id, JSON_ARRAY(%s))
                           )
                     )
                 """
