@@ -545,12 +545,17 @@ def view_trackers():
         tracker_files_url = f"{BASE_UPLOAD_URL}/{UPLOAD_SUBDIRS['TRACKER_FILES']}/"
         for t in trackers:
             tracker_file_temp = (t.get("tracker_file") or "").strip()
+            # print(f"DEBUG: Processing tracker_file: '{tracker_file_temp}'")
+            
             if not tracker_file_temp:
                 t["tracker_file"] = None
-            elif tracker_file_temp.lower().startswith(("http://", "https://")):
+            elif "://" in tracker_file_temp.lower() or tracker_file_temp.startswith(BASE_UPLOAD_URL):
+                # If it's already an absolute URL or already has our prefix, don't add it again
                 t["tracker_file"] = tracker_file_temp
             else:
                 t["tracker_file"] = tracker_files_url + tracker_file_temp
+            
+            # print(f"DEBUG: Normalized to: '{t['tracker_file']}'")
 
         # -----------------------------
         # Month Summary
