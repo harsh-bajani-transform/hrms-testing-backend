@@ -128,8 +128,11 @@ def user_handler():
                 return api_response(401, "Invalid email or password")
 
             if user.get("profile_picture"):
-                filename = user.get("profile_picture")
-                user["profile_picture"] = f"{BASE_UPLOAD_URL}/{UPLOAD_SUBDIRS['PROFILE_PIC']}/{filename}"
+                filename = (user.get("profile_picture") or "").strip()
+                if filename.lower().startswith(("http://", "https://")):
+                    user["profile_picture"] = filename
+                else:
+                    user["profile_picture"] = f"{BASE_UPLOAD_URL}/{UPLOAD_SUBDIRS['PROFILE_PIC']}/{filename}"
             else:
                 user["profile_picture"] = None
 
