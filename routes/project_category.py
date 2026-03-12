@@ -1,8 +1,8 @@
 # routes/project_category.py
 
 from flask import Blueprint, request
-from utils.response import api_response
-from config import get_db_connection
+from ..utils.response import api_response
+from ..config import get_db_connection
 from datetime import datetime
 
 project_category_bp = Blueprint("project_category", __name__)

@@ -1,8 +1,8 @@
 from flask import Blueprint, request
-from config import get_db_connection
-from utils.response import api_response
-from utils.api_log_utils import log_api_call
-from utils.cloudinary_utils import upload_to_cloudinary, delete_from_cloudinary, FOLDER_TRACKER
+from ..config import get_db_connection
+from ..utils.response import api_response
+from ..utils.api_log_utils import log_api_call
+from ..utils.cloudinary_utils import upload_to_cloudinary, delete_from_cloudinary, FOLDER_TRACKER
 from datetime import datetime, timedelta
 import re
 import os
@@ -521,7 +521,7 @@ def view_trackers():
             df = data["date_from"]
             if len(df) == 10: df += " 00:00:00"
             query += " AND CAST(twt.date_time AS DATETIME) >= %s"
-            params.append(df)   
+            params.append(df)
         if data.get("date_to"):
             dt_ = data["date_to"]
             if len(dt_) == 10: dt_ += " 23:59:59"

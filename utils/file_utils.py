@@ -2,7 +2,7 @@ import base64
 import os
 import uuid
 import mimetypes
-from config import UPLOAD_FOLDER, UPLOAD_SUBDIRS
+from ..config import UPLOAD_FOLDER, UPLOAD_SUBDIRS
 import re
 from werkzeug.utils import secure_filename
 from flask import current_app

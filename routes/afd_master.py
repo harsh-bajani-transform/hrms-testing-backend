@@ -1,8 +1,8 @@
 from flask import Blueprint, request
 from datetime import datetime
-from config import get_db_connection
-from utils.validators import validate_request
-from utils.response import api_response
+from ..config import get_db_connection
+from ..utils.validators import validate_request
+from ..utils.response import api_response
 
 afd_master_bp = Blueprint("afd_master", __name__, url_prefix="/qc/afd-master")
 

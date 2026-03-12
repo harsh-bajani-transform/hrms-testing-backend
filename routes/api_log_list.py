@@ -1,6 +1,6 @@
 from flask import Blueprint, request
-from config import get_db_connection
-from utils.response import api_response
+from ..config import get_db_connection
+from ..utils.response import api_response
 from datetime import datetime
 
 def get_action_description(api_name):

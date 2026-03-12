@@ -1,5 +1,5 @@
 from flask import request
-from utils.response import api_response
+from .response import api_response
 import re
 
 # USERNAME Validation

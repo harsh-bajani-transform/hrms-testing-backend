@@ -1,6 +1,6 @@
 from flask import Blueprint, request
-from utils.api_log_utils import log_api_call
-from utils.response import api_response
+from ..utils.api_log_utils import log_api_call
+from ..utils.response import api_response
 
 api_log_bp = Blueprint("api_log", __name__)
 

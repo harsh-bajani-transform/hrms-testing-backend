@@ -1,6 +1,6 @@
 from flask import Blueprint, request
-from utils.response import api_response
-from config import get_db_connection
+from ..utils.response import api_response
+from ..config import get_db_connection
 
 permission_bp = Blueprint("permission", __name__, url_prefix="/permission")
 

@@ -1,8 +1,8 @@
 # routes/qc_afd.py
 
 from flask import Blueprint, request
-from config import get_db_connection
-from utils.response import api_response
+from ..config import get_db_connection
+from ..utils.response import api_response
 from datetime import datetime
 
 qc_afd_bp = Blueprint("qc_afd", __name__)
