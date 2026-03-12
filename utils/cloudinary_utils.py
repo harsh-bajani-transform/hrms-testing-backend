@@ -9,6 +9,7 @@ FOLDER_TRACKER  = "hrms/tracker_files"
 FOLDER_PROJECT  = "hrms/project_pprt"
 FOLDER_TASK     = "hrms/task_files"
 FOLDER_PROFILE  = "hrms/profile_pictures"
+FOLDER_QC_REWORK = "hrms/qc_rework_files"
 
 
 def _extract_public_id(url_or_public_id: str) -> str:
