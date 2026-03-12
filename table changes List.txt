@@ -16,7 +16,3 @@ update tfs_user set user_password = "Z0FBQUFBQnBuOHAwR2NFVVBzc0EyVEVVMll2djlGbU9
 
 ALTER TABLE email_send_logs
 ADD COLUMN our_response TEXT NULL AFTER body;
-
-https://tfshrms.cloud/email/email_tracking/unsub?k=test@gmail.com&to=receivertest@gmail.com&from=TESTMAIL
-
-15 12,16,18 * * * /usr/bin/python3 /path/to/send_tracker_report_standalone.py >> /path/to/cron.log 2>&1
