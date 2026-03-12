@@ -4,15 +4,15 @@ from flask import Blueprint, request
 from datetime import datetime
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
-from ..config import get_db_connection, RESET_SECRET_KEY, RESET_TOKEN_TTL_SECONDS, RESET_FRONTEND_URL
-from ..utils.response import api_response
-from ..utils.validators import validate_request, is_valid_email, is_valid_password
+from config import get_db_connection, RESET_SECRET_KEY, RESET_TOKEN_TTL_SECONDS, RESET_FRONTEND_URL
+from utils.response import api_response
+from utils.validators import validate_request, is_valid_email, is_valid_password
 
 # ✅ NEW: reusable email util (SMTP / provider)
-from ..utils.email_utils import send_email
+from utils.email_utils import send_email
 
 # ✅ NEW: use same encryption as user.py
-from ..utils.security import encrypt_password
+from utils.security import encrypt_password
 
 password_reset_bp = Blueprint("password_reset", __name__)
 

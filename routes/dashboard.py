@@ -1,8 +1,8 @@
 # routes/dashboard.py
 
 from flask import Blueprint, request
-from ..config import get_db_connection, UPLOAD_FOLDER, UPLOAD_SUBDIRS, BASE_UPLOAD_URL
-from ..utils.response import api_response
+from config import get_db_connection, UPLOAD_FOLDER, UPLOAD_SUBDIRS, BASE_UPLOAD_URL
+from utils.response import api_response
 
 dashboard_bp = Blueprint("dashboard", __name__, url_prefix="/dashboard")
 

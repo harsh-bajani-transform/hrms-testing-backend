@@ -1,15 +1,15 @@
 from flask import Blueprint, request
-from ..config import get_db_connection, BASE_UPLOAD_URL, UPLOAD_SUBDIRS
-from ..utils.response import api_response
-from ..utils.security import encrypt_password, decrypt_password, safe_decrypt_password
+from config import get_db_connection, BASE_UPLOAD_URL, UPLOAD_SUBDIRS
+from utils.response import api_response
+from utils.security import encrypt_password, decrypt_password, safe_decrypt_password
 from datetime import datetime
-from ..utils.validators import (
+from utils.validators import (
     is_valid_username,
     is_valid_email,
     is_valid_password,
     is_valid_phone
 )
-from ..utils.validators import validate_request
+from utils.validators import validate_request
 import json
 import re
 
@@ -190,7 +190,7 @@ def user_handler():
     uploaded = request.files.get("profile_picture")
     if uploaded and uploaded.filename:
         try:
-            from ..utils.file_utils import save_uploaded_file
+            from utils.file_utils import save_uploaded_file
             custom_filename = build_profile_pic_filename(user_name, uploaded.filename)
             profile_picture = save_uploaded_file(uploaded, UPLOAD_SUBDIRS["PROFILE_PIC"], custom_filename)
         except ValueError as e:

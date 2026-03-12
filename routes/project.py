@@ -1,10 +1,10 @@
 # routes/project.py
 
 from flask import Blueprint, request
-from ..utils.response import api_response
-from ..config import get_db_connection
-from ..utils.cloudinary_utils import upload_to_cloudinary, delete_from_cloudinary, FOLDER_PROJECT
-from ..utils.file_utils import is_allowed_file
+from utils.response import api_response
+from config import get_db_connection
+from utils.cloudinary_utils import upload_to_cloudinary, delete_from_cloudinary, FOLDER_PROJECT
+from utils.file_utils import is_allowed_file
 import json
 import os
 from datetime import datetime

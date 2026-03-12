@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
-from ..config import get_db_connection
+from config import get_db_connection
 
 qc_bp = Blueprint("qc", __name__)
 

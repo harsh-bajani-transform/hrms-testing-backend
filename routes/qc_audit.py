@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
-from ..config import get_db_connection
+from config import get_db_connection
 from datetime import datetime
-from ..utils.cloudinary_utils import upload_to_cloudinary, delete_from_cloudinary
+from utils.cloudinary_utils import upload_to_cloudinary, delete_from_cloudinary
 
 qc_audit_bp = Blueprint("qc_audit", __name__)
 

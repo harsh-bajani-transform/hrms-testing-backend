@@ -1,8 +1,8 @@
 # routes/user_monthly_tracker.py
 
 from flask import Blueprint, request
-from ..config import get_db_connection
-from ..utils.response import api_response
+from config import get_db_connection
+from utils.response import api_response
 from datetime import datetime
 
 user_monthly_tracker_bp = Blueprint("user_monthly_tracker", __name__)

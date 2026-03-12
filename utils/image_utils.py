@@ -3,7 +3,7 @@ import os
 import re
 from io import BytesIO
 from PIL import Image
-from ..config import UPLOAD_FOLDER, UPLOAD_SUBDIRS
+from config import UPLOAD_FOLDER, UPLOAD_SUBDIRS
 
 def save_base64_image_as_webp(base64_string, user_name):
     if not base64_string:

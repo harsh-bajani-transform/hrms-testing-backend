@@ -1,4 +1,4 @@
-from ..config import get_db_connection
+from config import get_db_connection
 from datetime import datetime
 
 def log_api_call(api_name, user_id, device_id, device_type, api_call_time=None):

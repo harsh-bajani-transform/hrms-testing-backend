@@ -1,10 +1,10 @@
 # routes/user.py
 from flask import Blueprint, request
-from ..utils.response import api_response
-from ..config import get_db_connection, UPLOAD_SUBDIRS, BASE_UPLOAD_URL, UPLOAD_FOLDER
-from ..utils.security import decrypt_password, encrypt_password, safe_decrypt_password
-from ..utils.validators import validate_request
-from ..utils.json_utils import to_db_json
+from utils.response import api_response
+from config import get_db_connection, UPLOAD_SUBDIRS, BASE_UPLOAD_URL, UPLOAD_FOLDER
+from utils.security import decrypt_password, encrypt_password, safe_decrypt_password
+from utils.validators import validate_request
+from utils.json_utils import to_db_json
 from datetime import datetime
 import json
 import os
@@ -230,6 +230,10 @@ def list_users():
             params.append(str(int(user_id)))   # exact match
             params.append(str(int(user_id)))   # FIND_IN_SET
 
+        if data.get("is_active") is not None:
+            query += " AND u.is_active = %s"
+            params.append(data.get("is_active"))
+
         query += " ORDER BY u.user_id DESC"
 
         cursor.execute(query, tuple(params))
@@ -340,7 +344,7 @@ def update_user():
         # --- file handling
         uploaded = request.files.get("profile_picture")
         if uploaded and uploaded.filename:
-            from ..utils.file_utils import save_uploaded_file  # generic
+            from utils.file_utils import save_uploaded_file  # generic
 
             use_name = (form.get("user_name") or existing_name)
             custom_filename = build_profile_pic_filename(use_name, uploaded.filename)
@@ -360,7 +364,6 @@ def update_user():
                 print("DELETE FAILED (user update):", e, "old_file=", old_profile_file)
 
             user_fields["profile_picture"] = new_filename
-            user_fields["profile_picture_base64"] = None  # clear base64 if column exists
 
         # build update
         for col, val in user_fields.items():
@@ -423,6 +426,7 @@ def delete_user():
 
         cursor.execute("""
             UPDATE tfs_user
+            
             SET is_delete = 0, is_active = 0
             WHERE user_id = %s
         """, (user_id,))
