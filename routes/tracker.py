@@ -166,6 +166,7 @@ def add_tracker():
                 cloudinary_url, _ = upload_to_cloudinary(
                     uploaded, FOLDER_TRACKER, display_name=custom_name, resource_type="raw"
                 )
+                print(f"Cloudinary upload successful: {cloudinary_url}")
                 tracker_file = cloudinary_url
             except ValueError as e:
                 return api_response(400, str(e))
@@ -543,10 +544,24 @@ def view_trackers():
 
         # Normalize tracker_file
         for t in trackers:
-            if not t.get("tracker_file"):
-                t["tracker_file"] = None
+            file_path = t.get("tracker_file")
 
-        # -----------------------------
+            if not file_path:
+                t["tracker_file"] = None
+                continue
+
+            # If already cloudinary URL, keep as is
+            if file_path.startswith("http"):
+                t["tracker_file"] = file_path
+
+            # If mistakenly prefixed with python path
+            elif "https://" in file_path:
+                t["tracker_file"] = file_path[file_path.index("https://"):]
+
+            else:
+                t["tracker_file"] = file_path
+
+                # -----------------------------
         # Month Summary
         # -----------------------------
         month_summary = []
