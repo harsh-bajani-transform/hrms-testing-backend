@@ -1,5 +1,5 @@
 from flask import Blueprint, request
-from config import get_db_connection
+from config import get_db_connection, BASE_UPLOAD_URL, UPLOAD_SUBDIRS
 from utils.response import api_response
 from utils.api_log_utils import log_api_call
 from utils.cloudinary_utils import upload_to_cloudinary, delete_from_cloudinary, FOLDER_TRACKER
@@ -543,6 +543,7 @@ def view_trackers():
         trackers = cursor.fetchall()
 
         # Normalize tracker_file
+        tracker_files_url = f"{BASE_UPLOAD_URL}/{UPLOAD_SUBDIRS['TRACKER_FILES']}/"
         for t in trackers:
             file_path = t.get("tracker_file")
 
