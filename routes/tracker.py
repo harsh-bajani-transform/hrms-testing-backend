@@ -542,9 +542,15 @@ def view_trackers():
         trackers = cursor.fetchall()
 
         # Normalize tracker_file
+        tracker_files_url = f"{BASE_UPLOAD_URL}/{UPLOAD_SUBDIRS['TRACKER_FILES']}/"
         for t in trackers:
-            if not t.get("tracker_file"):
+            tracker_file_temp = (t.get("tracker_file") or "").strip()
+            if not tracker_file_temp:
                 t["tracker_file"] = None
+            elif tracker_file_temp.lower().startswith(("http://", "https://")):
+                t["tracker_file"] = tracker_file_temp
+            else:
+                t["tracker_file"] = tracker_files_url + tracker_file_temp
 
         # -----------------------------
         # Month Summary

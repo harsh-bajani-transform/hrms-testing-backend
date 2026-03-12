@@ -71,13 +71,14 @@ def _attach_profile_picture_url(users):
 
     for u in users:
         filename = (u.get("profile_picture") or "").strip()
-        if not filename:
-            u["profile_picture"] = None
-        elif filename.lower().startswith(("http://", "https://")):
-            u["profile_picture"] = filename
+        if filename:
+            if filename.lower().startswith(("http://", "https://")):
+                u["profile_picture"] = filename
+            else:
+                filename = os.path.basename(filename)  # safety
+                u["profile_picture"] = f"{base}/{sub}/{filename}"
         else:
-            filename = os.path.basename(filename)  # safety
-            u["profile_picture"] = f"{base}/{sub}/{filename}"
+            u["profile_picture"] = None
     return users
 
 
