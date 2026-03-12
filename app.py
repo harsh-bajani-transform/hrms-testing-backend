@@ -45,10 +45,10 @@ app.register_blueprint(qc_bp, url_prefix="/qc")
 app.register_blueprint(qc_afd_bp, url_prefix="/qc_afd")
 app.register_blueprint(qc_audit_bp, url_prefix="/qc_audit")
 
-print("\n==== REGISTERED ROUTES ====")
-for r in app.url_map.iter_rules():
-    print(r, r.methods)
-print("==== END ROUTES ====\n")
+# print("\n==== REGISTERED ROUTES ====")
+# for r in app.url_map.iter_rules():
+#     print(r, r.methods)
+# print("==== END ROUTES ====\n")
 
 
 # CORS(app, supports_credentials=True)

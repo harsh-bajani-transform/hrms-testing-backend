@@ -826,9 +826,9 @@ def view_daily_trackers():
                 ROUND(dwc.cumulative_billable_hours_till_day, 4)
                     AS cumulative_billable_hours_till_day,
 
-                -- QC data for that day (temp_qc.date is TEXT 'YYYY-MM-DD')
-                tq.qc_score AS qc_score,
-                tq.assigned_hours AS assigned_hours,
+                -- QC data from separate tables
+                qr.qc_score AS qc_score,
+                tqc.assigned_hours AS assigned_hours,
 
                 umt.user_monthly_tracker_id,
                 COALESCE(CAST(umt.monthly_target AS DECIMAL(10,2)), 0) AS monthly_target,
@@ -874,9 +874,13 @@ def view_daily_trackers():
             JOIN tfs_user u ON u.user_id = dwc.user_id
             LEFT JOIN team t ON t.team_id = u.team_id
 
-            LEFT JOIN temp_qc tq
-              ON tq.user_id = dwc.user_id
-             AND tq.{QC_DATE_COL} = DATE_FORMAT(dwc.work_date, '%Y-%m-%d')
+            LEFT JOIN qc_records qr
+              ON qr.agent_user_id = dwc.user_id
+             AND qr.date_of_file_submission = dwc.work_date
+
+            LEFT JOIN temp_qc tqc
+              ON tqc.user_id = dwc.user_id
+             AND tqc.date = DATE_FORMAT(dwc.work_date, '%Y-%m-%d')
 
             LEFT JOIN user_monthly_tracker umt
               ON umt.user_id = dwc.user_id
