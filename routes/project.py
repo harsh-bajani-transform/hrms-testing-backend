@@ -251,7 +251,7 @@ def update_project():
             "project_code",
             "project_description",
             "project_manager_id",
-            "project_category_id"
+            "project_category_id",
         ]:
 
             if form.get(key) is not None:
@@ -265,6 +265,15 @@ def update_project():
                     val = None
 
                 update_values[key] = val
+        
+        # json list fields
+        for key in [
+            "asst_project_manager_id",
+            "project_team_id",
+            "project_qa_id",
+        ]:
+            if form.get(key) is not None:
+                update_values[key] = json.dumps(_get_json_list(form, key))
 
 
         # FLAG MAPPING (API -> DB)
