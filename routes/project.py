@@ -107,8 +107,8 @@ def create_project():
     project_category_id = form.get("project_category_id")
 
     # NEW FLAGS
-    requires_ai_evaluation = int(form.get("requires_ai_evaluation", 0))
-    requires_duplicate_check = int(form.get("requires_duplicate_check", 0))
+    requires_ai_evaluation = str(form.get("requires_ai_evaluation", "false")).lower() in ("true", "1")
+    requires_duplicate_check = str(form.get("requires_duplicate_check", "false")).lower() in ("true", "1")
 
     uploaded_files = _get_uploaded_files()
 
@@ -270,10 +270,10 @@ def update_project():
         # FLAG MAPPING (API -> DB)
 
         if form.get("requires_ai_evaluation") is not None:
-            update_values["ai_evaluation"] = int(form.get("requires_ai_evaluation"))
+            update_values["ai_evaluation"] = str(form.get("requires_ai_evaluation")).lower() in ("true", "1")
 
         if form.get("requires_duplicate_check") is not None:
-            update_values["duplicate_check"] = int(form.get("requires_duplicate_check"))
+            update_values["duplicate_check"] = str(form.get("requires_duplicate_check")).lower() in ("true", "1")
             
         if not update_values:
             return api_response(400, "No fields to update")
@@ -360,8 +360,8 @@ def list_projects():
 
                 "project_files": parse_db_files(proj["project_pprt"]),
 
-                "requires_ai_evaluation": proj["ai_evaluation"],
-                "requires_duplicate_check": proj["duplicate_check"],
+                "requires_ai_evaluation": bool(proj["ai_evaluation"]),
+                "requires_duplicate_check": bool(proj["duplicate_check"]),
 
                 "created_date": proj["created_date"],
                 "updated_date": proj["updated_date"]
