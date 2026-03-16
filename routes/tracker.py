@@ -246,6 +246,8 @@ def update_tracker():
         production = float(form.get("production", tracker["production"]))
         base_target = float(form.get("base_target", tracker["actual_target"]))
         date_time = form.get("date_time", tracker["date_time"])
+        project_id = form.get("project_id", tracker["project_id"])
+        task_id = form.get("task_id", tracker["task_id"])
         print(date_time)
 
         # tenure + user_name
@@ -317,7 +319,9 @@ def update_tracker():
                 tracker_note=%s,
                 shift=%s,
                 updated_date=%s,
-                date_time=%s
+                date_time=%s,
+                project_id=%s,
+                task_id=%s
             WHERE tracker_id=%s
             """,
             (
@@ -332,6 +336,8 @@ def update_tracker():
                 shift,
                 updated_date,
                 date_time,
+                project_id,
+                task_id,
                 tracker_id,
             ),
         )
@@ -889,9 +895,16 @@ def view_daily_trackers():
             JOIN tfs_user u ON u.user_id = dwc.user_id
             LEFT JOIN team t ON t.team_id = u.team_id
 
-            LEFT JOIN qc_records qr
-              ON qr.agent_user_id = dwc.user_id
-             AND qr.date_of_file_submission = dwc.work_date
+            LEFT JOIN (
+                SELECT
+                    agent_user_id,
+                    DATE(date_of_file_submission) AS qc_date,
+                    ROUND(AVG(qc_score), 2) AS qc_score
+                FROM qc_records
+                GROUP BY agent_user_id, DATE(date_of_file_submission)
+            ) qr
+            ON qr.agent_user_id = dwc.user_id
+            AND qr.qc_date = dwc.work_date
 
             LEFT JOIN temp_qc tqc
               ON tqc.user_id = dwc.user_id

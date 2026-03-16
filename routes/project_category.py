@@ -7,7 +7,6 @@ from datetime import datetime
 
 project_category_bp = Blueprint("project_category", __name__)
 
-
 # ---------------- CREATE PROJECT CATEGORY ---------------- #
 @project_category_bp.route("/create", methods=["POST"])
 def create_project_category():
@@ -174,7 +173,7 @@ def list_project_categories():
                 q.afd_category_id
 
             FROM project_category pc
-            INNER JOIN afd a 
+            LEFT JOIN afd a 
                 ON a.afd_id = pc.afd_id 
                 AND a.is_active = 1
 
@@ -216,14 +215,16 @@ def list_project_categories():
                     "afd": {}
                 }
 
-            if afd_id not in result[pc_id]["afd"]:
+            # Only process AFD data if afd_id exists
+            if afd_id is not None and afd_id not in result[pc_id]["afd"]:
                 result[pc_id]["afd"][afd_id] = {
                     "afd_id": afd_id,
                     "afd_name": row["afd_name"],
                     "afd_categories": {}
                 }
 
-            if qc_id:
+            # Only process QC data if qc_id exists
+            if qc_id and afd_id is not None:
                 qc_data = {
                     "qc_afd_id": qc_id,
                     "qc_afd_name": row["qc_afd_name"],

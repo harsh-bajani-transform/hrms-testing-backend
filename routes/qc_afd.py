@@ -20,6 +20,7 @@ def now_str() -> str:
 # ---------------------------------------------------------
 @qc_afd_bp.route("/add", methods=["POST"])
 def add_qc_afd():
+    print("Received data for add_qc_afd:", request.get_json())
 
     data = request.get_json() or {}
 
@@ -77,7 +78,7 @@ def add_qc_afd():
             # Check duplicate category under same master
             cursor.execute("""
                 SELECT qc_afd_id FROM qc_afd
-                WHERE afd_id=%s AND afd_name=%s AND afd_category_id=0
+                WHERE afd_id=%s AND LOWER(afd_name)=LOWER(%s) AND afd_category_id=0
             """, (afd_id, cat_name.strip()))
 
             if cursor.fetchone():
@@ -115,7 +116,7 @@ def add_qc_afd():
 
                 cursor.execute("""
                     SELECT qc_afd_id FROM qc_afd
-                    WHERE afd_name=%s AND afd_category_id=%s
+                    WHERE LOWER(afd_name)=LOWER(%s) AND afd_category_id=%s
                 """, (sub_name.strip(), category_id))
 
                 if cursor.fetchone():
