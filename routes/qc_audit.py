@@ -85,10 +85,29 @@ def qc_audit_report():
 
     try:
 
+        # Debug: Check if we have data and join conditions
+        debug_query = """
+            SELECT 
+                qa.qc_record_id,
+                qr.agent_user_id,
+                qr.qc_user_id,
+                tu.user_name as tu_name,
+                qc_user.user_name as qc_name
+            FROM qc_audit qa
+            LEFT JOIN qc_records qr ON qa.qc_record_id = qr.id
+            LEFT JOIN tfs_user tu ON qr.agent_user_id = tu.user_id
+            LEFT JOIN tfs_user qc_user ON qr.qc_user_id = qc_user.user_id
+            LIMIT 5
+        """
+        cursor.execute(debug_query)
+        debug_rows = cursor.fetchall()
+        print(f"DEBUG: First 5 rows with user IDs: {debug_rows}")
+        
         query = """
         SELECT
         qa.created_date AS audit_datetime,
         tu.user_name AS agent_name,
+        qc_user.user_name AS qc_agent_name,
         p.project_name AS project,
         t.task_name AS task,
         ROUND(qr.`10%_data_generated_count` * 0.10) AS total_qcs,
@@ -106,6 +125,9 @@ def qc_audit_report():
         LEFT JOIN tfs_user tu
         ON qr.agent_user_id = tu.user_id
 
+        LEFT JOIN tfs_user qc_user
+        ON qr.qc_user_id = qc_user.user_id
+
         LEFT JOIN project p
         ON qr.project_id = p.project_id
 
@@ -116,6 +138,7 @@ def qc_audit_report():
         qa.qc_record_id,
         qa.created_date,
         tu.user_name,
+        qc_user.user_name,
         p.project_name,
         t.task_name,
         qr.`10%_data_generated_count`,

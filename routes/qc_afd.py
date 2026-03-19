@@ -373,31 +373,50 @@ def delete_qc_afd():
         conn.rollback()
         return api_response(500, f"Delete failed: {str(e)}")
 
-    finally:
-        cursor.close()
-        conn.close()
-
 
 @qc_afd_bp.route("/list", methods=["POST"])
 def list_qc_afd():
-
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
+        # Get request data for filtering
+        data = request.get_json() or {}
+        project_category_id = data.get("project_category_id")
+
         # -------------------------
         # Fetch Masters
         # -------------------------
-        cursor.execute("SELECT afd_id, afd_name FROM afd WHERE is_active=1")
+        if project_category_id:
+            cursor.execute("""
+                SELECT a.afd_id, a.afd_name 
+                FROM afd a
+                JOIN project_category pc ON a.afd_id = pc.afd_id
+                WHERE a.is_active=1 AND pc.project_category_id=%s
+            """, (project_category_id,))
+        else:
+            cursor.execute("SELECT afd_id, afd_name FROM afd WHERE is_active=1")
         masters = cursor.fetchall()
 
         # -------------------------
         # Fetch All Categories/Subcategories
         # -------------------------
-        cursor.execute("""
-            SELECT qc_afd_id, afd_id, afd_name, afd_points, afd_category_id
-            FROM qc_afd
-        """)
+        if project_category_id:
+            cursor.execute("""
+                SELECT qc_afd_id, afd_id, afd_name, afd_points, afd_category_id
+                FROM qc_afd
+                WHERE afd_id IN (
+                    SELECT a.afd_id 
+                    FROM afd a
+                    JOIN project_category pc ON a.afd_id = pc.afd_id
+                    WHERE pc.project_category_id=%s
+                )
+            """, (project_category_id,))
+        else:
+            cursor.execute("""
+                SELECT qc_afd_id, afd_id, afd_name, afd_points, afd_category_id
+                FROM qc_afd
+            """)
         qc_rows = cursor.fetchall()
 
         # -------------------------

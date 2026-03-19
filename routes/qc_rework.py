@@ -134,6 +134,8 @@ def view_rework_trackers():
         LEFT JOIN task t 
             ON t.task_id = qrt.task_id
 
+        WHERE qr.status IN ('correction', 'rework')
+
         ORDER BY qrt.id DESC
         """
 

@@ -116,6 +116,14 @@ def add_task():
 
     is_active = form.get("is_active")
     is_active = int(is_active) if str(is_active).strip().isdigit() else 1
+    
+    qc_percentage = form.get("qc_percentage")
+
+    if qc_percentage is not None:
+        try:
+            qc_percentage = float(qc_percentage)
+        except:
+            return api_response(400, "qc_percentage must be a number")
 
     # ✅ file upload (key: task_file)
     uploaded = request.files.get("task_file")
@@ -148,13 +156,14 @@ def add_task():
                 task_name,
                 task_description,
                 task_target,
+                qc_percentage,
                 task_file,
                 important_columns,
                 is_active,
                 created_date,
                 updated_date
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """,
             (
                 project_id,
@@ -162,6 +171,7 @@ def add_task():
                 task_name,
                 task_description,
                 task_target,
+                qc_percentage,
                 saved_filename,
                 json.dumps(important_columns),
                 is_active,
@@ -245,6 +255,13 @@ def update_task():
         if form.get("is_active") is not None:
             v = form.get("is_active")
             update_values["is_active"] = int(v) if str(v).strip().isdigit() else v
+            
+        if form.get("qc_percentage") is not None:
+            try:
+                update_values["qc_percentage"] = float(form.get("qc_percentage"))
+            except:
+                conn.rollback()
+                return api_response(400, "qc_percentage must be a number")
 
         # --- FILE LOGIC ---
         # Case 1: new file uploaded → replace
@@ -375,7 +392,7 @@ def list_tasks():
             """
             SELECT task_id, project_id, task_team_id,
                    task_name, task_description, task_target,
-                   task_file, important_columns,
+                   qc_percentage,task_file, important_columns,
                    is_active, created_date, updated_date
             FROM task
             WHERE is_active=1
@@ -398,6 +415,7 @@ def list_tasks():
                     "task_description": t["task_description"],
                     "task_target": t["task_target"],
                     "important_columns": important_cols,
+                    "qc_percentage": t.get("qc_percentage"),
                     "task_file": task_file_url(t.get("task_file")),  # ✅ absolute
                     "created_date": t["created_date"],
                     "updated_date": t["updated_date"],
