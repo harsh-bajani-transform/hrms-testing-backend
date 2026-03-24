@@ -47,7 +47,7 @@ def get_role_context(cursor, user_id: int) -> dict:
             ) AS agent_role_id
         FROM tfs_user u
         JOIN user_role r ON r.role_id = u.role_id
-        WHERE u.user_id=%s AND u.is_active=1 AND u.is_delete=1
+        WHERE u.user_id=%s AND u.is_delete=1
         """,
         (int(user_id),),
     )
@@ -504,7 +504,7 @@ def view_trackers():
                 AND twt.user_id IN (
                     SELECT tu.user_id
                     FROM tfs_user tu
-                    WHERE tu.is_active = 1 AND tu.is_delete = 1
+                    WHERE tu.is_delete = 1
                     AND (
                         tu.project_manager_id=%s OR tu.asst_manager_id=%s OR tu.qa_id=%s
                         OR tu.user_id=%s
@@ -790,8 +790,7 @@ def view_daily_trackers():
                     AND twt.user_id IN (
                         SELECT tu.user_id
                         FROM tfs_user tu
-                        WHERE tu.is_active = 1
-                          AND tu.is_delete = 1
+                        WHERE tu.is_delete = 1
                           AND (
                                 tu.project_manager_id = %s
                                 OR tu.asst_manager_id = %s

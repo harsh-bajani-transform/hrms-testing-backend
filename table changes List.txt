@@ -19,3 +19,7 @@ ADD COLUMN our_response TEXT NULL AFTER body;
 
 19/3/2026
 ALTER TABLE `task` ADD `qc_percentage` INT NOT NULL AFTER `important_columns`;
+
+24/3/2026
+ALTER TABLE tfs_user 
+ADD COLUMN deactivated_at DATETIME NULL;

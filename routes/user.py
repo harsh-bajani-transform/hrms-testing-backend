@@ -5,7 +5,7 @@ from config import get_db_connection, UPLOAD_SUBDIRS, BASE_UPLOAD_URL, UPLOAD_FO
 from utils.security import decrypt_password, encrypt_password, safe_decrypt_password
 from utils.validators import validate_request
 from utils.json_utils import to_db_json
-from datetime import datetime
+from datetime import datetime,timedelta
 import json
 import os
 import re
@@ -144,6 +144,21 @@ def list_users():
         return err
 
     user_id = data.get("user_id")
+    
+    month_year = data.get("month_year")
+    date_from = data.get("date_from")
+    date_to = data.get("date_to")
+
+    month_start = None
+    month_end = None
+
+    if date_from or date_to:
+        ref_date = date_to or date_from
+        dt = datetime.strptime(ref_date[:10], "%Y-%m-%d")
+        month_start = dt.replace(day=1)
+        next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        month_end = next_month - timedelta(seconds=1)
+
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -188,9 +203,24 @@ def list_users():
             LEFT JOIN user_designation d ON d.designation_id = u.designation_id
             LEFT JOIN team t ON u.team_id = t.team_id
             WHERE u.is_delete = 1
+            AND (
+            u.is_active = 1
+            OR (
+                u.is_active = 0
+                AND u.deactivated_at IS NOT NULL
+                AND u.deactivated_at >= %s
+            )
+        )
         """
 
         params: list = []
+        
+        if month_start:
+            params.append(month_start.strftime("%Y-%m-%d %H:%M:%S"))
+        else:
+            now = datetime.now()
+            current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            params.append(current_month_start.strftime("%Y-%m-%d %H:%M:%S"))
 
         # ✅ Role-based filtering (MariaDB-safe; supports BOTH JSON arrays and comma/bracket strings)
         # This avoids: invalid JSON errors + missing matches when stored value isn't valid JSON
@@ -312,13 +342,20 @@ def update_user():
     cursor = conn.cursor(dictionary=True)
 
     try:
-        cursor.execute("SELECT user_id, user_name, profile_picture FROM tfs_user WHERE user_id=%s", (user_id,))
+        cursor.execute("SELECT user_id, user_name, profile_picture, is_active FROM tfs_user WHERE user_id=%s", (user_id,))
         existing = cursor.fetchone()
         if not existing:
             return api_response(404, "User not found")
 
         old_profile_file = existing.get("profile_picture")
         existing_name = existing.get("user_name") or "USER"
+        
+        # Get current is_active from DB
+        existing_is_active = int(existing["is_active"])
+
+        # Incoming value
+        new_is_active = form.get("is_active")
+        new_is_active = int(new_is_active) if new_is_active is not None else None
 
         user_fields = {
             "user_name": form.get("user_name"),
@@ -327,20 +364,31 @@ def update_user():
             "role_id": form.get("role_id"),
             "designation_id": form.get("designation_id"),
             "reporting_manager": form.get("reporting_manager"),
-            "is_active": form.get("is_active"),
             "user_tenure": form.get("user_tenure"),
             "team_id": form.get("team_id"),
             "project_manager_id": to_db_json(form.get("project_manager_id"), allow_single=True),
             "asst_manager_id": to_db_json(form.get("asst_manager_id"), allow_single=True),
             "qa_id": to_db_json(form.get("qa_id"), allow_single=True),
         }
+        
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        if new_is_active is not None:
+            user_fields["is_active"] = new_is_active
+
+            # 👉 Deactivation (1 → 0)
+            if existing_is_active == 1 and new_is_active == 0:
+                user_fields["deactivated_at"] = now_str
+
+            # 👉 Reactivation (0 → 1)
+            elif existing_is_active == 0 and new_is_active == 1:
+                user_fields["deactivated_at"] = None
 
         # Encrypt password if provided
         user_password = form.get("user_password")
         if user_password:
             user_fields["user_password"] = encrypt_password(user_password)
             
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         user_update_cols = []
         user_update_vals = []
 
@@ -371,9 +419,8 @@ def update_user():
 
         # build update
         for col, val in user_fields.items():
-            if val is not None:
-                user_update_cols.append(f"{col} = %s")
-                user_update_vals.append(val)
+            user_update_cols.append(f"{col} = %s")
+            user_update_vals.append(val)
 
         if not user_update_cols:
             return api_response(400, "No valid fields provided for update")
