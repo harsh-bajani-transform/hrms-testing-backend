@@ -385,6 +385,18 @@ def list_user_monthly_targets():
 
         if not agent_role_id:
             return api_response(500, "Agent role not found in user_role table", None)
+        
+        if month_year:
+            dt = datetime.strptime(month_year, "%b%Y")  # Mar2026
+            month_start = dt.replace(day=1)
+        else:
+            now = datetime.now()
+            month_start = now.replace(day=1)
+
+        month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(seconds=1)
+
+        month_start_str = month_start.strftime("%Y-%m-%d %H:%M:%S")
+        month_end_str = month_end.strftime("%Y-%m-%d %H:%M:%S")
 
         # ---------------- Base WHERE: only agent rows ----------------
         user_where = """
@@ -395,19 +407,12 @@ def list_user_monthly_targets():
                     OR (
                         u.is_active = 0
                         AND u.deactivated_at IS NOT NULL
-                        AND u.deactivated_at >= %s
+                        AND u.deactivated_at BETWEEN %s AND %s
                     )
             )
         """
-        
-        if month_year:
-            dt = datetime.strptime(month_year, "%b%Y")  # e.g. Mar2026
-            month_start = dt.replace(day=1)
-        else:
-            now = datetime.now()
-            month_start = now.replace(day=1)
 
-        user_params = [agent_role_id, month_start.strftime("%Y-%m-%d %H:%M:%S")]
+        user_params = [agent_role_id, month_start_str, month_end_str]
 
         if filter_user_id:
             user_where += " AND u.user_id=%s"
