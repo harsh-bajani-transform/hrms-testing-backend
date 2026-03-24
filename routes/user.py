@@ -216,11 +216,14 @@ def list_users():
         params: list = []
         
         if month_start:
-            params.append(month_start.strftime("%Y-%m-%d %H:%M:%S"))
+            params.append(month_end.strftime("%Y-%m-%d %H:%M:%S"))
         else:
             now = datetime.now()
             current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            params.append(current_month_start.strftime("%Y-%m-%d %H:%M:%S"))
+            next_month = (current_month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+            current_month_end = next_month - timedelta(seconds=1)
+            
+            params.append(current_month_end.strftime("%Y-%m-%d %H:%M:%S"))
 
         # ✅ Role-based filtering (MariaDB-safe; supports BOTH JSON arrays and comma/bracket strings)
         # This avoids: invalid JSON errors + missing matches when stored value isn't valid JSON
@@ -363,7 +366,6 @@ def update_user():
             "user_address": form.get("user_address"),
             "role_id": form.get("role_id"),
             "designation_id": form.get("designation_id"),
-            "reporting_manager": form.get("reporting_manager"),
             "user_tenure": form.get("user_tenure"),
             "team_id": form.get("team_id"),
             "project_manager_id": to_db_json(form.get("project_manager_id"), allow_single=True),
