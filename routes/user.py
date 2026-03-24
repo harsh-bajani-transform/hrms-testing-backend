@@ -360,18 +360,37 @@ def update_user():
         new_is_active = form.get("is_active")
         new_is_active = int(new_is_active) if new_is_active is not None else None
 
-        user_fields = {
-            "user_name": form.get("user_name"),
-            "user_number": form.get("user_number"),
-            "user_address": form.get("user_address"),
-            "role_id": form.get("role_id"),
-            "designation_id": form.get("designation_id"),
-            "user_tenure": form.get("user_tenure"),
-            "team_id": form.get("team_id"),
-            "project_manager_id": to_db_json(form.get("project_manager_id"), allow_single=True),
-            "asst_manager_id": to_db_json(form.get("asst_manager_id"), allow_single=True),
-            "qa_id": to_db_json(form.get("qa_id"), allow_single=True),
-        }
+        user_fields = {}
+
+        if form.get("user_name") is not None:
+            user_fields["user_name"] = form.get("user_name")
+
+        if form.get("user_number") is not None:
+            user_fields["user_number"] = form.get("user_number")
+
+        if form.get("user_address") is not None:
+            user_fields["user_address"] = form.get("user_address")
+
+        if form.get("role_id") is not None:
+            user_fields["role_id"] = form.get("role_id")
+
+        if form.get("designation_id") is not None:
+            user_fields["designation_id"] = form.get("designation_id")
+
+        if form.get("user_tenure") is not None:
+            user_fields["user_tenure"] = form.get("user_tenure")
+
+        if form.get("team_id") is not None:
+            user_fields["team_id"] = form.get("team_id")
+
+        if form.get("project_manager_id") is not None:
+            user_fields["project_manager_id"] = to_db_json(form.get("project_manager_id"), allow_single=True)
+
+        if form.get("asst_manager_id") is not None:
+            user_fields["asst_manager_id"] = to_db_json(form.get("asst_manager_id"), allow_single=True)
+
+        if form.get("qa_id") is not None:
+            user_fields["qa_id"] = to_db_json(form.get("qa_id"), allow_single=True)
         
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
