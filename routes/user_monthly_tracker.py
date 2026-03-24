@@ -388,11 +388,26 @@ def list_user_monthly_targets():
 
         # ---------------- Base WHERE: only agent rows ----------------
         user_where = """
-            WHERE u.is_active=1
-              AND u.is_delete=1
-              AND u.role_id=%s
+            WHERE u.is_delete=1
+            AND u.role_id=%s
+            AND (
+                    u.is_active = 1
+                    OR (
+                        u.is_active = 0
+                        AND u.deactivated_at IS NOT NULL
+                        AND u.deactivated_at >= %s
+                    )
+            )
         """
-        user_params = [agent_role_id]
+        
+        if month_year:
+            dt = datetime.strptime(month_year, "%b%Y")  # e.g. Mar2026
+            month_start = dt.replace(day=1)
+        else:
+            now = datetime.now()
+            month_start = now.replace(day=1)
+
+        user_params = [agent_role_id, month_start.strftime("%Y-%m-%d %H:%M:%S")]
 
         if filter_user_id:
             user_where += " AND u.user_id=%s"
