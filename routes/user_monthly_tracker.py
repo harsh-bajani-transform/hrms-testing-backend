@@ -128,7 +128,7 @@ def add_user_monthly_target():
                 """
                 SELECT user_id
                 FROM tfs_user
-                WHERE user_id=%s AND is_active=1 AND is_delete=1
+                WHERE user_id=%s AND is_delete=1
                 """,
                 (user_id,),
             )
@@ -143,7 +143,7 @@ def add_user_monthly_target():
                 """
                 SELECT user_monthly_tracker_id
                 FROM user_monthly_tracker
-                WHERE user_id=%s AND month_year=%s AND is_active=1
+                WHERE user_id=%s AND month_year=%s 
                 """,
                 (user_id, month_year),
             )
@@ -262,7 +262,7 @@ def update_user_monthly_target():
                 """
                 SELECT user_id
                 FROM tfs_user
-                WHERE user_id=%s AND is_active=1
+                WHERE user_id=%s AND is_delete=1
                 """,
                 (new_user_id,),
             )
