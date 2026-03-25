@@ -208,7 +208,9 @@ def list_users():
             OR (
                 u.is_active = 0
                 AND u.deactivated_at IS NOT NULL
-                AND u.deactivated_at >= %s
+                AND (
+                    (YEAR(u.deactivated_at) * 100 + MONTH(u.deactivated_at)) >= %s
+                )
             )
         )
         """
@@ -216,14 +218,12 @@ def list_users():
         params: list = []
         
         if month_start:
-            params.append(month_end.strftime("%Y-%m-%d %H:%M:%S"))
+            month_val = month_start.year * 100 + month_start.month
         else:
             now = datetime.now()
-            current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            next_month = (current_month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
-            current_month_end = next_month - timedelta(seconds=1)
+            month_val = now.year * 100 + now.month
             
-            params.append(current_month_end.strftime("%Y-%m-%d %H:%M:%S"))
+        params.append(month_val)
 
         # ✅ Role-based filtering (MariaDB-safe; supports BOTH JSON arrays and comma/bracket strings)
         # This avoids: invalid JSON errors + missing matches when stored value isn't valid JSON
