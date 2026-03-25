@@ -464,7 +464,7 @@ def view_trackers():
             twt.*, u.user_name, u.user_email,
             am.user_id AS assistant_manager_id, am.user_name AS assistant_manager_name, am.user_email AS assistant_manager_email,
             p.project_id, p.project_name, p.project_category_id,
-            tk.task_name, t.team_name,
+            tk.task_name, tk.qc_percentage, t.team_name,
             (twt.production / NULLIF(twt.tenure_target, 0)) AS billable_hours
         FROM task_work_tracker twt
         LEFT JOIN tfs_user u ON u.user_id = twt.user_id
