@@ -221,6 +221,7 @@ def view_pending_qc_dashboard():
         cursor.execute("""
             SELECT
                 qr.id AS qc_record_id,
+                qr.tracker_id,
                 u.user_name AS agent_name,
                 p.project_name,
                 pc.project_category_id,
@@ -347,6 +348,7 @@ def view_pending_qc_dashboard():
                 "project_category_id": qc["project_category_id"],
                 "project_category_name": qc["project_category_name"],
                 "task_name": qc["task_name"],
+                "tracker_id": qc["tracker_id"],
 
                 "latest_rework": {
                     **latest_rework,
