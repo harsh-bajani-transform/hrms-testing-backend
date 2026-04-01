@@ -34,23 +34,18 @@ def view_qc_history_user_based():
         # ✅ 2. Base Query
         base_query = """
         SELECT
-            qr.id AS qc_record_id,
+            qr.*,
             u.user_name AS agent_name,
+            u.team_id AS user_team_id,
+            t.team_name,
             p.project_name,
-            t.task_name,
-            qr.qc_score,
-            qr.status,
-            qr.qc_status,
-            qr.qc_file_path,
-            qr.whole_file_path,
-            qr.date_of_file_submission,
-            qr.created_at,
-            qr.updated_at
+            task.task_name
         FROM qc_records qr
         LEFT JOIN task_work_tracker twt ON qr.tracker_id = twt.tracker_id
         LEFT JOIN tfs_user u ON u.user_id = twt.user_id
+        LEFT JOIN team t ON u.team_id = t.team_id
         LEFT JOIN project p ON p.project_id = twt.project_id
-        LEFT JOIN task t ON t.task_id = twt.task_id
+        LEFT JOIN task task ON task.task_id = twt.task_id
         """
 
         params = []
@@ -102,9 +97,9 @@ def view_qc_history_user_based():
         if not qc_records:
             return api_response(200, "No QC records found", {"count": 0, "records": []})
 
-        qc_record_ids = [r["qc_record_id"] for r in qc_records]
+        qc_record_ids = [r["id"] for r in qc_records]
 
-        # ✅ 5. Reworks
+        # 5. Reworks
         cursor.execute(f"""
             SELECT *
             FROM qc_rework_history
@@ -113,7 +108,7 @@ def view_qc_history_user_based():
         """, tuple(qc_record_ids))
         reworks = cursor.fetchall()
 
-        # ✅ 6. Corrections
+        # 6. Corrections
         cursor.execute(f"""
             SELECT *
             FROM qc_correction_history
@@ -122,7 +117,7 @@ def view_qc_history_user_based():
         """, tuple(qc_record_ids))
         corrections = cursor.fetchall()
 
-        # ✅ 7. Mapping
+        # 7. Mapping
         rework_map = {}
         for r in reworks:
             rework_map.setdefault(r["qc_record_id"], []).append(r)
@@ -131,11 +126,11 @@ def view_qc_history_user_based():
         for c in corrections:
             correction_map.setdefault(c["qc_record_id"], []).append(c)
 
-        # ✅ 8. Merge
+        # 8. Merge
         final_data = []
         for record in qc_records:
-            record["qc_rework"] = rework_map.get(record["qc_record_id"], [])
-            record["qc_correction"] = correction_map.get(record["qc_record_id"], [])
+            record["qc_rework"] = rework_map.get(record["id"], [])
+            record["qc_correction"] = correction_map.get(record["id"], [])
             final_data.append(record)
 
         return api_response(
