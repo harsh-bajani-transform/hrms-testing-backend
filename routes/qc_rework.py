@@ -223,10 +223,13 @@ def view_pending_qc_dashboard():
                 qr.id AS qc_record_id,
                 qr.tracker_id,
                 u.user_name AS agent_name,
+                u.user_id AS agent_id,
                 p.project_name,
+                p.project_id,
                 pc.project_category_id,
                 pc.project_category_name,
                 t.task_name,
+                t.task_id,
                 t.qc_percentage AS sampling_percentage,
                 qr.qc_score,
                 qr.error_list
@@ -345,10 +348,13 @@ def view_pending_qc_dashboard():
             # 6️⃣ Final object
             records.append({
                 "agent_name": qc["agent_name"],
+                "agent_id": qc["agent_id"],
                 "project_name": qc["project_name"],
+                "project_id": qc["project_id"],
                 "project_category_id": qc["project_category_id"],
                 "project_category_name": qc["project_category_name"],
                 "task_name": qc["task_name"],
+                "task_id": qc["task_id"],
                 "tracker_id": qc["tracker_id"],
                 "sampling_percentage": qc["sampling_percentage"],
 
