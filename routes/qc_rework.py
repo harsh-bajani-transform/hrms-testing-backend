@@ -227,6 +227,7 @@ def view_pending_qc_dashboard():
                 pc.project_category_id,
                 pc.project_category_name,
                 t.task_name,
+                t.qc_percentage AS sampling_percentage,
                 qr.qc_score,
                 qr.error_list
             FROM qc_records qr
@@ -349,6 +350,7 @@ def view_pending_qc_dashboard():
                 "project_category_name": qc["project_category_name"],
                 "task_name": qc["task_name"],
                 "tracker_id": qc["tracker_id"],
+                "sampling_percentage": qc["sampling_percentage"],
 
                 "latest_rework": {
                     **latest_rework,
