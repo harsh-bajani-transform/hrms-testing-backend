@@ -470,7 +470,7 @@ def view_trackers():
         # -----------------------------
         query = """
         SELECT 
-            twt.*, u.user_name, u.user_email,
+            twt.*, u.user_id, u.user_id AS agent_id, u.user_name, u.user_email,
             am.user_id AS assistant_manager_id, am.user_name AS assistant_manager_name, am.user_email AS assistant_manager_email,
             p.project_id, p.project_name, p.project_category_id, pc.afd_id,
             tk.task_name, tk.qc_percentage, t.team_name,
@@ -514,8 +514,7 @@ def view_trackers():
                 AND twt.user_id IN (
                     SELECT tu.user_id
                     FROM tfs_user tu
-                    WHERE tu.is_delete = 1
-                    AND (
+                    WHERE (
                         tu.project_manager_id=%s OR tu.asst_manager_id=%s OR tu.qa_id=%s
                         OR tu.user_id=%s
                         OR JSON_CONTAINS(tu.project_manager_id, JSON_ARRAY(%s))
@@ -561,6 +560,7 @@ def view_trackers():
         # Normalize tracker_file
         for t in trackers:
             file_path = t.get("tracker_file")
+            t["agent_id"] = t.get("user_id")
 
             if not file_path:
                 t["tracker_file"] = None
