@@ -31,7 +31,7 @@ def view_qc_history_user_based():
 
         role = user["role_name"].strip().lower()
 
-        # ✅ 2. Base Query
+        # 2. Base Query
         base_query = """
         SELECT
             qr.*,
@@ -39,18 +39,20 @@ def view_qc_history_user_based():
             u.team_id AS user_team_id,
             t.team_name,
             p.project_name,
-            task.task_name
+            task.task_name,
+            qa.user_name AS qa_agent_name
         FROM qc_records qr
         LEFT JOIN task_work_tracker twt ON qr.tracker_id = twt.tracker_id
         LEFT JOIN tfs_user u ON u.user_id = twt.user_id
         LEFT JOIN team t ON u.team_id = t.team_id
         LEFT JOIN project p ON p.project_id = twt.project_id
         LEFT JOIN task task ON task.task_id = twt.task_id
+        LEFT JOIN tfs_user qa ON qa.user_id = qr.qa_user_id
         """
 
         params = []
 
-        # ✅ 3. Role-based filtering (JSON ARRAY SUPPORT)
+        # 3. Role-based filtering (JSON ARRAY SUPPORT)
         if "admin" in role:
             pass
 
