@@ -118,6 +118,7 @@ def add_task():
     is_active = int(is_active) if str(is_active).strip().isdigit() else 1
     
     qc_percentage = form.get("qc_percentage")
+    
 
     if qc_percentage is not None:
         try:

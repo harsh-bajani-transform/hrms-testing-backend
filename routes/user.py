@@ -159,7 +159,6 @@ def list_users():
         next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
         month_end = next_month - timedelta(seconds=1)
 
-
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 

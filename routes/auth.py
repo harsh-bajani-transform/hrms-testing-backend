@@ -151,7 +151,7 @@ def user_handler():
     # =========================================================
     form = request.form
 
-    required = ["user_name", "user_email", "user_password", "role_id"]
+    required = ["user_name", "user_email", "user_password", "role_id","user_tenure"]
     for f in required:
         if not form.get(f):
             return api_response(400, f"{f} is required")

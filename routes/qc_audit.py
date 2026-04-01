@@ -89,14 +89,14 @@ def qc_audit_report():
         debug_query = """
             SELECT 
                 qa.qc_record_id,
-                qr.agent_user_id,
-                qr.qc_user_id,
+                qr.agent_id,
+                qr.qa_user_id,
                 tu.user_name as tu_name,
                 qc_user.user_name as qc_name
             FROM qc_audit qa
             LEFT JOIN qc_records qr ON qa.qc_record_id = qr.id
-            LEFT JOIN tfs_user tu ON qr.agent_user_id = tu.user_id
-            LEFT JOIN tfs_user qc_user ON qr.qc_user_id = qc_user.user_id
+            LEFT JOIN tfs_user tu ON qr.agent_id = tu.user_id
+            LEFT JOIN tfs_user qc_user ON qr.qa_user_id = qc_user.user_id
             LIMIT 5
         """
         cursor.execute(debug_query)
@@ -110,11 +110,11 @@ def qc_audit_report():
         qc_user.user_name AS qc_agent_name,
         p.project_name AS project,
         t.task_name AS task,
-        ROUND(qr.`10%_data_generated_count` * 0.10) AS total_qcs,
+        ROUND(qr.`qc_generated_count` * 0.10) AS total_qcs,
         AVG(qa.qc_score) AS avg_qc_score,
-        qr.error_score AS total_errors,
+        qr.error_list AS total_errors,
         qa.qc_checked_file,
-        qr.status,
+        qr.qc_status,
         qa.error_notes
 
         FROM qc_audit qa
@@ -123,16 +123,17 @@ def qc_audit_report():
         ON qa.qc_record_id = qr.id
 
         LEFT JOIN tfs_user tu
-        ON qr.agent_user_id = tu.user_id
+        ON qr.agent_id = tu.user_id
 
         LEFT JOIN tfs_user qc_user
-        ON qr.qc_user_id = qc_user.user_id
+        ON qr.qa_user_id = qc_user.user_id
 
         LEFT JOIN project p
         ON qr.project_id = p.project_id
 
         LEFT JOIN task t
-        ON qr.task_id = t.task_id
+        ON qr.ta
+        sk_id = t.task_id
 
         GROUP BY
         qa.qc_record_id,
@@ -141,8 +142,8 @@ def qc_audit_report():
         qc_user.user_name,
         p.project_name,
         t.task_name,
-        qr.`10%_data_generated_count`,
-        qr.error_score,
+        qr.`qc_generated_count`,
+        qr.error_list,
         qa.qc_checked_file,
         qr.status,
         qa.error_notes

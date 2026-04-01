@@ -262,14 +262,14 @@ def update_tracker():
 
         tracker_file = old_file
         uploaded = request.files.get("tracker_file")
-        
+
         shift = form.get("shift", tracker.get("shift", "DAY")).upper()
         if shift not in ["DAY", "NIGHT"]:
             return api_response(400, "Shift must be DAY or NIGHT")
 
         # ✅ Replace file only if new file provided
         if uploaded and uploaded.filename:
-            # project_code
+            # project_code  
             cursor.execute("SELECT project_code FROM project WHERE project_id=%s", (tracker["project_id"],))
             proj = cursor.fetchone() or {}
             project_code = proj.get("project_code") or "PROJECT"
@@ -397,11 +397,20 @@ def delete_tracker():
         cursor.execute(
             "UPDATE task_work_tracker SET is_active = 0 WHERE tracker_id = %s",
             (tracker_id,),
-        )
+        )        
+        
+        # ✅ delete associated tracker_records (Node.js backend ingestion data)
+        tracker_file = tracker.get("tracker_file")
+        if tracker_file:
+            cursor.execute(
+                "DELETE FROM tracker_records WHERE file_path = %s",
+                (tracker_file,)
+            )
+ 
         conn.commit()
-
+ 
         # ✅ delete from Cloudinary
-        safe_delete_cloudinary_tracker(tracker.get("tracker_file"))
+        safe_delete_cloudinary_tracker(tracker_file)
 
         device_id = data.get("device_id")
         device_type = data.get("device_type")
@@ -717,8 +726,8 @@ def view_daily_trackers():
         if not month_year:
             cursor.execute("SELECT DATE_FORMAT(CURDATE(), '%b%Y') AS m")
             month_year = normalize_month_year((cursor.fetchone() or {}).get("m") or "")
-        
-        
+
+
         # -------- Role check
         cursor.execute(
             """
@@ -756,7 +765,7 @@ def view_daily_trackers():
         if data.get("task_id"):
             where += " AND twt.task_id=%s"
             params.append(data["task_id"])
-            
+
         if data.get("shift"):
             where += " AND twt.shift = %s"
             params.append(data["shift"].upper())
@@ -897,13 +906,13 @@ def view_daily_trackers():
 
             LEFT JOIN (
                 SELECT
-                    agent_user_id,
+                    agent_id,
                     DATE(date_of_file_submission) AS qc_date,
                     ROUND(AVG(qc_score), 2) AS qc_score
                 FROM qc_records
-                GROUP BY agent_user_id, DATE(date_of_file_submission)
+                GROUP BY agent_id, DATE(date_of_file_submission)
             ) qr
-            ON qr.agent_user_id = dwc.user_id
+            ON qr.agent_id = dwc.user_id
             AND qr.qc_date = dwc.work_date
 
             LEFT JOIN temp_qc tqc
