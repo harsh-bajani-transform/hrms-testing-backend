@@ -132,8 +132,7 @@ def qc_audit_report():
         ON qr.project_id = p.project_id
 
         LEFT JOIN task t
-        ON qr.ta
-        sk_id = t.task_id
+        ON qr.task_id = t.task_id
 
         GROUP BY
         qa.qc_record_id,
