@@ -223,6 +223,8 @@ def view_pending_qc_dashboard():
                 qr.id AS qc_record_id,
                 u.user_name AS agent_name,
                 p.project_name,
+                pc.project_category_id,
+                pc.project_category_name,
                 t.task_name,
                 qr.qc_score,
                 qr.error_list
@@ -230,6 +232,7 @@ def view_pending_qc_dashboard():
             LEFT JOIN task_work_tracker twt ON qr.tracker_id = twt.tracker_id
             LEFT JOIN tfs_user u ON u.user_id = twt.user_id
             LEFT JOIN project p ON p.project_id = twt.project_id
+            LEFT JOIN project_category pc ON p.project_category_id = pc.project_category_id
             LEFT JOIN task t ON t.task_id = twt.task_id
             ORDER BY qr.id DESC
         """)
@@ -341,6 +344,8 @@ def view_pending_qc_dashboard():
             records.append({
                 "agent_name": qc["agent_name"],
                 "project_name": qc["project_name"],
+                "project_category_id": qc["project_category_id"],
+                "project_category_name": qc["project_category_name"],
                 "task_name": qc["task_name"],
 
                 "latest_rework": {
