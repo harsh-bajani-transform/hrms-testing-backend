@@ -515,15 +515,14 @@ def view_trackers():
                     SELECT tu.user_id
                     FROM tfs_user tu
                     WHERE (
-                        tu.project_manager_id=%s OR tu.asst_manager_id=%s OR tu.qa_id=%s
-                        OR tu.user_id=%s
-                        OR JSON_CONTAINS(tu.project_manager_id, JSON_ARRAY(%s))
-                        OR JSON_CONTAINS(tu.asst_manager_id, JSON_ARRAY(%s))
-                        OR JSON_CONTAINS(tu.qa_id, JSON_ARRAY(%s))
+                        tu.user_id = %s
+                        OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.project_manager_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
+                        OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.asst_manager_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
+                        OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.qa_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
                     )
                 )
             """
-            params.extend([manager_id_str]*7)
+            params.extend([manager_id_str]*4)
         if data.get("project_id"):
             query += " AND twt.project_id=%s"
             params.append(data["project_id"])
@@ -802,17 +801,14 @@ def view_daily_trackers():
                         FROM tfs_user tu
                         WHERE tu.is_delete = 1
                           AND (
-                                tu.project_manager_id = %s
-                                OR tu.asst_manager_id = %s
-                                OR tu.qa_id = %s
-                                OR tu.user_id = %s
-                                OR JSON_CONTAINS(tu.project_manager_id, JSON_ARRAY(%s))
-                                OR JSON_CONTAINS(tu.asst_manager_id, JSON_ARRAY(%s))
-                                OR JSON_CONTAINS(tu.qa_id, JSON_ARRAY(%s))
+                                tu.user_id = %s
+                                OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.project_manager_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
+                                OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.asst_manager_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
+                                OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.qa_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
                           )
                     )
                 """
-                params.extend([manager_id] * 7)
+                params.extend([manager_id] * 4)
 
         # -------- Daily aggregation + cumulative + daily required
         # ✅ team_id + team_name added in daily rows
