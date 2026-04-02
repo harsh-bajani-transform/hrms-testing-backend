@@ -325,7 +325,7 @@ def view_pending_qc_dashboard():
             # =========================
             # 🔁 PREVIOUS CORRECTION
             # =========================
-            prev_corr_score = None
+            prev_corr_score = qc["qc_score"]
             prev_corr_errors = None
 
             if latest_correction:
