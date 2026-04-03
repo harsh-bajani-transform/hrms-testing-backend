@@ -164,7 +164,9 @@ def view_all_qc_history():
 
         # 2️⃣ Fetch related reworks
         query_reworks = f"""
-        SELECT *
+        SELECT 
+            *,
+            rework_status as review_status
         FROM qc_rework_history
         WHERE qc_record_id IN ({','.join(map(str, qc_record_ids))})
         ORDER BY qc_rework_id DESC
@@ -174,7 +176,9 @@ def view_all_qc_history():
 
         # 3️⃣ Fetch related corrections
         query_corrections = f"""
-        SELECT *
+        SELECT 
+            *,
+            correction_status as review_status
         FROM qc_correction_history
         WHERE qc_record_id IN ({','.join(map(str, qc_record_ids))})
         ORDER BY qc_correction_id DESC

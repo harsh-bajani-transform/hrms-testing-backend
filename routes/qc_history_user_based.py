@@ -103,7 +103,9 @@ def view_qc_history_user_based():
 
         # 5. Reworks
         cursor.execute(f"""
-            SELECT *
+            SELECT 
+                *,
+                rework_status as review_status
             FROM qc_rework_history
             WHERE qc_record_id IN ({','.join(['%s'] * len(qc_record_ids))})
             ORDER BY qc_rework_id DESC
@@ -112,7 +114,9 @@ def view_qc_history_user_based():
 
         # 6. Corrections
         cursor.execute(f"""
-            SELECT *
+            SELECT 
+                *,
+                correction_status as review_status
             FROM qc_correction_history
             WHERE qc_record_id IN ({','.join(['%s'] * len(qc_record_ids))})
             ORDER BY qc_correction_id DESC
