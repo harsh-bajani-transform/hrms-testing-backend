@@ -460,8 +460,6 @@ def view_trackers():
 
         if not month_year:
             cursor.execute("SELECT DATE_FORMAT(CURDATE(), '%b%Y') AS m")
-            month_year = normalize_month_year((cursor.fetchone() or {}).get("m") or "")
-
         ctx = get_role_context(cursor, int(logged_in_user_id))
         role_name = ctx["user_role_name"]
 
@@ -485,14 +483,6 @@ def view_trackers():
         WHERE twt.is_active != 0
         """
 
-        # Month filter
-        try:
-            dt = datetime.strptime(month_year, "%b%Y")
-            query += " AND YEAR(CAST(twt.date_time AS DATETIME)) = %s AND MONTH(CAST(twt.date_time AS DATETIME)) = %s"
-            params.extend([dt.year, dt.month])
-        except Exception:
-            pass
-
         # Dynamic filters
         if data.get("team_id"):
             query += " AND u.team_id=%s"
@@ -515,14 +505,15 @@ def view_trackers():
                     SELECT tu.user_id
                     FROM tfs_user tu
                     WHERE (
-                        tu.user_id = %s
-                        OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.project_manager_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
-                        OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.asst_manager_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
-                        OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.qa_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
+                        tu.project_manager_id=%s OR tu.asst_manager_id=%s OR tu.qa_id=%s
+                        OR tu.user_id=%s
+                        OR JSON_CONTAINS(tu.project_manager_id, JSON_ARRAY(%s))
+                        OR JSON_CONTAINS(tu.asst_manager_id, JSON_ARRAY(%s))
+                        OR JSON_CONTAINS(tu.qa_id, JSON_ARRAY(%s))
                     )
                 )
             """
-            params.extend([manager_id_str]*4)
+            params.extend([manager_id_str]*7)
         if data.get("project_id"):
             query += " AND twt.project_id=%s"
             params.append(data["project_id"])
@@ -577,36 +568,14 @@ def view_trackers():
                 t["tracker_file"] = file_path
 
                 # -----------------------------
-        # Month Summary
-        # -----------------------------
-        month_summary = []
-        user_ids = sorted({t["user_id"] for t in trackers if t.get("user_id")})
-        if user_ids:
-            in_ph = ",".join(["%s"]*len(user_ids))
-            summary_query = f"""
-                SELECT u.user_id, u.user_name, u.user_email, m.mon AS month_year,
-                       umt.user_monthly_tracker_id,
-                       COALESCE(CAST(umt.monthly_target AS DECIMAL(10,2)),0) AS monthly_target,
-                       COALESCE(umt.extra_assigned_hours,0) AS extra_assigned_hours,
-                       (COALESCE(CAST(umt.monthly_target AS DECIMAL(10,2)),0)+COALESCE(umt.extra_assigned_hours,0)) AS monthly_total_target
-                FROM tfs_user u
-                CROSS JOIN (SELECT %s AS mon) m
-                LEFT JOIN user_monthly_tracker umt
-                    ON umt.user_id=u.user_id AND umt.is_active=1 AND umt.month_year=m.mon
-                WHERE u.user_id IN ({in_ph})
-            """
-            summary_params = [month_year] + user_ids
-            cursor.execute(summary_query, tuple(summary_params))
-            month_summary = cursor.fetchall()
-
-        # -----------------------------
         # Totals
         # -----------------------------
         # Total assigned hours from temp_qc
         assigned_query = "SELECT COALESCE(SUM(assigned_hours),0) AS total_assigned FROM temp_qc WHERE 1=1"
         assigned_params = []
 
-        if user_ids:
+        if trackers:
+            user_ids = [t["user_id"] for t in trackers if t.get("user_id")]
             in_ph = ",".join(["%s"]*len(user_ids))
             assigned_query += f" AND user_id IN ({in_ph})"
             assigned_params.extend(user_ids)
@@ -641,9 +610,7 @@ def view_trackers():
             "Trackers fetched successfully",
             {
                 "count": len(trackers),
-                "month_year": month_year,
                 "trackers": trackers,
-                "month_summary": month_summary,
                 "totals": totals
             }
         )
@@ -801,14 +768,17 @@ def view_daily_trackers():
                         FROM tfs_user tu
                         WHERE tu.is_delete = 1
                           AND (
-                                tu.user_id = %s
-                                OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.project_manager_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
-                                OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.asst_manager_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
-                                OR FIND_IN_SET(%s, REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tu.qa_id,''), '[',''), ']',''), '"',''), ' ', '')) > 0
+                                tu.project_manager_id = %s
+                                OR tu.asst_manager_id = %s
+                                OR tu.qa_id = %s
+                                OR tu.user_id = %s
+                                OR JSON_CONTAINS(tu.project_manager_id, JSON_ARRAY(%s))
+                                OR JSON_CONTAINS(tu.asst_manager_id, JSON_ARRAY(%s))
+                                OR JSON_CONTAINS(tu.qa_id, JSON_ARRAY(%s))
                           )
                     )
                 """
-                params.extend([manager_id] * 4)
+                params.extend([manager_id] * 7)
 
         # -------- Daily aggregation + cumulative + daily required
         # ✅ team_id + team_name added in daily rows
