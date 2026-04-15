@@ -402,7 +402,7 @@ def list_user_monthly_targets():
                     -- Hybrid approach: Use rosters for April 2025 onwards, user_monthly_tracker for before April
                     SELECT 
                         user_id,
-                        month_year,
+                        month_year COLLATE utf8mb4_0900_ai_ci AS month_year,
                         working_days,
                         final_target as monthly_target,
                         extra_assigned_hours,
@@ -413,7 +413,7 @@ def list_user_monthly_targets():
                     UNION ALL
                     SELECT 
                         user_id,
-                        month_year,
+                        month_year COLLATE utf8mb4_0900_ai_ci AS month_year,
                         working_days,
                         monthly_target,
                         extra_assigned_hours,
@@ -422,27 +422,8 @@ def list_user_monthly_targets():
                     FROM user_monthly_tracker
                     WHERE is_active=1 AND month_year < '202504'   -- Before April 2025
                 ) umt
-                  ON umt.user_id = u.user_id
-                 AND umt.month_year=%s
-            """
-            twt_join = f"""
-                LEFT JOIN task_work_tracker twt
-                  ON twt.user_id = u.user_id
-                 AND twt.is_active=1
-                 AND {TRACKER_YEAR_MONTH} = {month_year_to_yyyymm_sql('%s')}
-            """
-            # ✅ avg_qc_score = SUM(qc_score) / COUNT(days having qc_score)
-            qc_join = f"""
-                LEFT JOIN (
-                    SELECT
-                        tq.user_id,
-                        ROUND(SUM(tq.qc_score) / NULLIF(COUNT(DISTINCT tq.date), 0), 2) AS avg_qc_score,
-                        COUNT(DISTINCT tq.date) AS qc_days_count
-                    FROM temp_qc tq
-                    WHERE tq.qc_score IS NOT NULL
-                      AND {QC_YEAR_MONTH} = {month_year_to_yyyymm_sql('%s')}
-                    GROUP BY tq.user_id
-                ) qc ON qc.user_id = u.user_id
+                ON umt.user_id = u.user_id
+                AND umt.month_year=%s
             """
         else:
             umt_join = """
@@ -450,7 +431,7 @@ def list_user_monthly_targets():
                     -- Hybrid approach: Use rosters for April 2025 onwards, user_monthly_tracker for before April
                     SELECT 
                         user_id,
-                        month_year,
+                        month_year COLLATE utf8mb4_0900_ai_ci AS month_year,
                         working_days,
                         final_target as monthly_target,
                         extra_assigned_hours,
@@ -461,7 +442,7 @@ def list_user_monthly_targets():
                     UNION ALL
                     SELECT 
                         user_id,
-                        month_year,
+                        month_year COLLATE utf8mb4_0900_ai_ci AS month_year,
                         working_days,
                         monthly_target,
                         extra_assigned_hours,
@@ -470,23 +451,7 @@ def list_user_monthly_targets():
                     FROM user_monthly_tracker
                     WHERE is_active=1 AND month_year < '202504'   -- Before April 2025
                 ) umt
-                  ON umt.user_id = u.user_id
-            """
-            twt_join = """
-                LEFT JOIN task_work_tracker twt
-                  ON twt.user_id = u.user_id
-                 AND twt.is_active=1
-            """
-            qc_join = """
-                LEFT JOIN (
-                    SELECT
-                        tq.user_id,
-                        ROUND(SUM(tq.qc_score) / NULLIF(COUNT(DISTINCT tq.date), 0), 2) AS avg_qc_score,
-                        COUNT(DISTINCT tq.date) AS qc_days_count
-                    FROM temp_qc tq
-                    WHERE tq.qc_score IS NOT NULL
-                    GROUP BY tq.user_id
-                ) qc ON qc.user_id = u.user_id
+                ON umt.user_id = u.user_id
             """
 
         # ---------------- Main query ----------------
