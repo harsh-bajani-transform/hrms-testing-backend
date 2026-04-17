@@ -182,26 +182,24 @@ CREATE TABLE target_change_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE roster_day_drafts (
-    draft_id INT AUTO_INCREMENT PRIMARY KEY,
-
-    roster_day_id INT,
-    roster_id INT NOT NULL,
-    user_id INT NOT NULL,
-    date DATE NOT NULL,
-
-    field_name VARCHAR(50) NOT NULL,
-    old_value VARCHAR(255),
-    new_value VARCHAR(255),
-
-    edited_by INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    is_submitted TINYINT(1) DEFAULT 0,
-
-    FOREIGN KEY (roster_id) REFERENCES rosters(roster_id),
-    FOREIGN KEY (user_id) REFERENCES tfs_user(user_id)
-);
+CREATE TABLE `roster_day_drafts` (
+ `draft_id` int(11) NOT NULL AUTO_INCREMENT,
+ `roster_day_id` int(11) DEFAULT NULL,
+ `roster_id` int(11) DEFAULT NULL,
+ `user_id` int(11) DEFAULT NULL,
+ `date` date DEFAULT NULL,
+ `changes_json` longtext NOT NULL CHECK (json_valid(`changes_json`)),
+ `old_json` longtext DEFAULT NULL CHECK (json_valid(`old_json`)),
+ `edited_by` int(11) DEFAULT NULL,
+ `status` enum('draft','pending','approved','rejected') DEFAULT 'draft',
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`draft_id`),
+ KEY `roster_id` (`roster_id`),
+ KEY `user_id` (`user_id`),
+ CONSTRAINT `roster_day_drafts_ibfk_1` FOREIGN KEY (`roster_id`) REFERENCES `rosters` (`roster_id`),
+ CONSTRAINT `roster_day_drafts_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `tfs_user` (`user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=75 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 CREATE INDEX idx_user_month ON rosters(user_id, month_year);
 CREATE INDEX idx_leave_user ON leaves(user_id);

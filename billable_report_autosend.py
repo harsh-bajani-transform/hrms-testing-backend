@@ -145,12 +145,41 @@ def fetch_data():
             r["user_id"]: float(r["worked_hours"] or 0) for r in cursor.fetchall()
         }
         
-        # Remove absent agents but keep team agents
+        # -------------------------
+        # LATEST QC DATE (GLOBAL) - Fetch before filtering
+        # -------------------------
+
+        cursor.execute(
+            """
+            SELECT MAX(DATE(date_of_file_submission)) AS latest_qc_date
+            FROM qc_records
+            WHERE qc_score IS NOT NULL AND DATE(date_of_file_submission) < %s
+            """,
+            (report_date,)
+        )
+
+        row = cursor.fetchone()
+        latest_qc_date = row["latest_qc_date"]
+
+        qc_user_ids = set()
+        if latest_qc_date:
+            cursor.execute(
+                f"""
+                SELECT DISTINCT agent_id AS user_id
+                FROM qc_records
+                WHERE DATE(date_of_file_submission) = %s
+                AND agent_id IN ({in_ph})
+                """,
+                [latest_qc_date] + user_ids,
+            )
+            qc_user_ids = {r["user_id"] for r in cursor.fetchall()}
+
+        # Remove absent agents but keep team agents AND users with QC scores
         active_user_ids = set(daily_map.keys())
 
         users = [
             u for u in users
-            if (u["user_id"] in active_user_ids or is_team_agent(u))
+            if (u["user_id"] in active_user_ids or is_team_agent(u) or u["user_id"] in qc_user_ids)
         ]
 
         if not users:
@@ -185,13 +214,18 @@ def fetch_data():
 
         cursor.execute(
             f"""
-            SELECT user_id,
-            COUNT(DISTINCT DATE(date_time)) AS days_worked
-            FROM task_work_tracker
-            WHERE DATE(date_time) BETWEEN %s AND %s
-            AND user_id IN ({in_ph})
-            AND is_active=1
-            GROUP BY user_id
+            SELECT twt.user_id,
+            COUNT(DISTINCT DATE(twt.date_time)) AS days_worked
+            FROM task_work_tracker twt
+            INNER JOIN temp_qc tq
+                ON tq.user_id = twt.user_id
+                AND DATE(tq.date) = DATE(twt.date_time)
+                AND tq.assigned_hours IS NOT NULL
+                AND tq.assigned_hours > 0
+            WHERE DATE(twt.date_time) BETWEEN %s AND %s
+            AND twt.user_id IN ({in_ph})
+            AND twt.is_active=1
+            GROUP BY twt.user_id
             """,
             [month_start, report_date] + user_ids,
         )
@@ -200,44 +234,35 @@ def fetch_data():
             r["user_id"]: int(r["days_worked"]) for r in cursor.fetchall()
         }
 
-        # -------------------------
-        # LATEST QC DATE (GLOBAL)
-        # -------------------------
-
-        cursor.execute(
-            """
-            SELECT MAX(DATE(date)) AS latest_qc_date
-            FROM temp_qc
-            WHERE qc_score IS NOT NULL AND DATE(date) < %s
-            """,
-            (report_date,)
-        )
-        # print(report_date)
-
-        row = cursor.fetchone()
-        latest_qc_date = row["latest_qc_date"]
-        # print(f"Latest QC date: {latest_qc_date}")
-
         qc_map = {}
 
         if latest_qc_date:
-
             cursor.execute(
                 f"""
-                SELECT user_id, qc_score, DATE(date) AS qc_date
-                FROM temp_qc
-                WHERE DATE(date) = %s
-                AND user_id IN ({in_ph})
+                SELECT 
+                    dwc.user_id,
+                    qr.qc_score,
+                    %s AS qc_date
+                FROM (
+                    SELECT DISTINCT user_id
+                    FROM tfs_user
+                    WHERE user_id IN ({in_ph})
+                ) dwc
+                LEFT JOIN (
+                    SELECT
+                        agent_id,
+                        ROUND(AVG(qc_score), 2) AS qc_score
+                    FROM qc_records
+                    WHERE DATE(date_of_file_submission) = %s
+                    AND agent_id IN ({in_ph})
+                    GROUP BY agent_id
+                ) qr
+                    ON qr.agent_id = dwc.user_id
                 """,
-                [latest_qc_date] + user_ids,
+                [latest_qc_date] + user_ids + [latest_qc_date] + user_ids,
             )
 
             qc_map = {r["user_id"]: r for r in cursor.fetchall()}
-            # print(f"QC Map: {qc_map}")
-        
-        # -------------------------
-        # AVG QC SCORE (MONTH TILL LATEST QC DATE)
-        # -------------------------
 
         avg_qc_map = {}
 
@@ -245,14 +270,28 @@ def fetch_data():
 
             cursor.execute(
                 f"""
-                    SELECT user_id, AVG(qc_score) AS avg_qc
-                    FROM temp_qc
-                    WHERE qc_score IS NOT NULL
-                    AND DATE(date) BETWEEN %s AND %s
-                    AND user_id IN ({in_ph})
-                    GROUP BY user_id
+                    SELECT 
+                        dwc.user_id,
+                        AVG(qr.qc_score) AS avg_qc
+                    FROM (
+                        SELECT DISTINCT user_id
+                        FROM tfs_user
+                        WHERE user_id IN ({in_ph})
+                    ) dwc
+                    LEFT JOIN (
+                        SELECT
+                            agent_id,
+                            qc_score
+                        FROM qc_records
+                        WHERE qc_score IS NOT NULL
+                        AND DATE(date_of_file_submission) BETWEEN %s AND %s
+                        AND agent_id IN ({in_ph})
+                    ) qr
+                        ON qr.agent_id = dwc.user_id
+                    WHERE qr.qc_score IS NOT NULL
+                    GROUP BY dwc.user_id
                 """,
-                [month_start, latest_qc_date] + user_ids,
+                user_ids + [month_start, latest_qc_date] + user_ids,
             )
 
             avg_qc_map = {

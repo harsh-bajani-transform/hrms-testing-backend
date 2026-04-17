@@ -153,7 +153,7 @@ def get_roster():
                     COALESCE(
                         -- Use draft data if there's a pending draft for logged-in user
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.day_type') IS NOT NULL THEN JSON_UNQUOTE(JSON_EXTRACT(d.changes_json, '$.day_type'))
                                     ELSE rd.day_type
@@ -164,7 +164,7 @@ def get_roster():
                     ) as day_type,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.is_leave') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.is_leave')
                                     ELSE rd.is_leave
@@ -175,7 +175,7 @@ def get_roster():
                     ) as is_leave,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.leave_type_id') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.leave_type_id')
                                     ELSE rd.leave_type_id
@@ -186,7 +186,7 @@ def get_roster():
                     ) as leave_type_id,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.is_target_leave') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.is_target_leave')
                                     ELSE rd.is_target_leave
@@ -197,7 +197,7 @@ def get_roster():
                     ) as is_target_leave,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.is_planned_leave') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.is_planned_leave')
                                     ELSE rd.is_planned_leave
@@ -208,7 +208,7 @@ def get_roster():
                     ) as is_planned_leave,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.shift') IS NOT NULL THEN JSON_UNQUOTE(JSON_EXTRACT(d.changes_json, '$.shift'))
                                     ELSE rd.shift
@@ -228,7 +228,7 @@ def get_roster():
                 LEFT JOIN roster_day_drafts d ON d.roster_day_id = rd.roster_day_id AND d.status = 'pending'
                 LEFT JOIN leave_types lt ON lt.leave_type_id = COALESCE(
                     CASE 
-                        WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                        WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                             CASE 
                                 WHEN JSON_EXTRACT(d.changes_json, '$.leave_type_id') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.leave_type_id')
                                 ELSE rd.leave_type_id
@@ -239,7 +239,7 @@ def get_roster():
                 )
                 {where_clause}
                 ORDER BY rd.date
-            """, tuple([logged_in_user_id] * 7 + query_params))
+            """, tuple(query_params))
 
             days = cursor.fetchall()
 
@@ -1367,7 +1367,7 @@ def get_roster():
                     COALESCE(
                         -- Use draft data if there's a pending draft for logged-in user
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.day_type') IS NOT NULL THEN JSON_UNQUOTE(JSON_EXTRACT(d.changes_json, '$.day_type'))
                                     ELSE rd.day_type
@@ -1378,7 +1378,7 @@ def get_roster():
                     ) as day_type,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.is_leave') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.is_leave')
                                     ELSE rd.is_leave
@@ -1389,7 +1389,7 @@ def get_roster():
                     ) as is_leave,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.leave_type_id') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.leave_type_id')
                                     ELSE rd.leave_type_id
@@ -1400,7 +1400,7 @@ def get_roster():
                     ) as leave_type_id,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.is_target_leave') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.is_target_leave')
                                     ELSE rd.is_target_leave
@@ -1411,7 +1411,7 @@ def get_roster():
                     ) as is_target_leave,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.is_planned_leave') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.is_planned_leave')
                                     ELSE rd.is_planned_leave
@@ -1422,7 +1422,7 @@ def get_roster():
                     ) as is_planned_leave,
                     COALESCE(
                         CASE 
-                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                            WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                                 CASE 
                                     WHEN JSON_EXTRACT(d.changes_json, '$.shift') IS NOT NULL THEN JSON_UNQUOTE(JSON_EXTRACT(d.changes_json, '$.shift'))
                                     ELSE rd.shift
@@ -1442,7 +1442,7 @@ def get_roster():
                 LEFT JOIN roster_day_drafts d ON d.roster_day_id = rd.roster_day_id AND d.status = 'pending'
                 LEFT JOIN leave_types lt ON lt.leave_type_id = COALESCE(
                     CASE 
-                        WHEN d.draft_id IS NOT NULL AND d.status = 'pending' AND d.edited_by = %s THEN
+                        WHEN d.draft_id IS NOT NULL AND d.status = 'pending' THEN
                             CASE 
                                 WHEN JSON_EXTRACT(d.changes_json, '$.leave_type_id') IS NOT NULL THEN JSON_EXTRACT(d.changes_json, '$.leave_type_id')
                                 ELSE rd.leave_type_id
@@ -1453,7 +1453,7 @@ def get_roster():
                 )
                 {where_clause}
                 ORDER BY rd.date
-            """, tuple([logged_in_user_id] * 7 + query_params))
+            """, tuple(query_params))
 
             days = cursor.fetchall()
 

@@ -40,7 +40,8 @@ def view_qc_history_user_based():
             t.team_name,
             p.project_name,
             task.task_name,
-            qa.user_name AS qa_agent_name
+            qa.user_name AS qa_agent_name,
+            am.user_name AS assistant_manager_name
         FROM qc_records qr
         LEFT JOIN task_work_tracker twt ON qr.tracker_id = twt.tracker_id
         LEFT JOIN tfs_user u ON u.user_id = twt.user_id
@@ -48,6 +49,7 @@ def view_qc_history_user_based():
         LEFT JOIN project p ON p.project_id = twt.project_id
         LEFT JOIN task task ON task.task_id = twt.task_id
         LEFT JOIN tfs_user qa ON qa.user_id = qr.qa_user_id
+        LEFT JOIN tfs_user am ON FIND_IN_SET(am.user_id, u.asst_manager_id) > 0
         """
 
         params = []

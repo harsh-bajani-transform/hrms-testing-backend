@@ -409,7 +409,7 @@ def list_user_monthly_targets():
                         roster_id as user_monthly_tracker_id,
                         'roster' as source_table
                     FROM rosters 
-                    WHERE month_year >= '202504'  -- April 2025 onwards
+                    WHERE month_year >= 'APR2025'  -- April 2025 onwards
                     UNION ALL
                     SELECT 
                         user_id,
@@ -420,7 +420,7 @@ def list_user_monthly_targets():
                         user_monthly_tracker_id,
                         'user_monthly_tracker' as source_table
                     FROM user_monthly_tracker
-                    WHERE is_active=1 AND month_year < '202504'   -- Before April 2025
+                    WHERE is_active=1 AND month_year < 'APR2025'   -- Before April 2025
                 ) umt
                   ON umt.user_id = u.user_id
                  AND umt.month_year=%s
@@ -442,38 +442,6 @@ def list_user_monthly_targets():
                     WHERE tq.qc_score IS NOT NULL
                       AND {QC_YEAR_MONTH} = {month_year_to_yyyymm_sql('%s')}
                     GROUP BY tq.user_id
-                ) qc ON qc.user_id = u.user_id
-            """
-        else:
-            umt_join = """
-                LEFT JOIN (
-                    -- Hybrid approach: Use rosters for April 2025 onwards, user_monthly_tracker for before April
-                    SELECT 
-                        user_id,
-                        month_year,
-                        working_days,
-                        final_target as monthly_target,
-                        extra_assigned_hours,
-                        roster_id as user_monthly_tracker_id,
-                        'roster' as source_table
-                    FROM rosters 
-                    WHERE month_year >= '202504'  -- April 2025 onwards
-                    UNION ALL
-                    SELECT 
-                        user_id,
-                        month_year,
-                        working_days,
-                        monthly_target,
-                        extra_assigned_hours,
-                        user_monthly_tracker_id,
-                        'user_monthly_tracker' as source_table
-                    FROM user_monthly_tracker
-                    WHERE is_active=1 AND month_year < '202504'   -- Before April 2025
-                ) umt
-                  ON umt.user_id = u.user_id
-            """
-            twt_join = """
-                LEFT JOIN task_work_tracker twt
                   ON twt.user_id = u.user_id
                  AND twt.is_active=1
             """
