@@ -49,10 +49,7 @@ def view_qc_history_user_based():
         LEFT JOIN project p ON p.project_id = twt.project_id
         LEFT JOIN task task ON task.task_id = twt.task_id
         LEFT JOIN tfs_user qa ON qa.user_id = qr.qa_user_id
-        LEFT JOIN tfs_user am ON (
-            JSON_CONTAINS(u.asst_manager_id, CONCAT('[', am.user_id, ']'))
-            OR u.asst_manager_id = am.user_id
-        )
+        LEFT JOIN tfs_user am ON FIND_IN_SET(am.user_id, u.asst_manager_id) > 0
         """
 
         params = []

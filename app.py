@@ -19,6 +19,7 @@ from routes.qc_rework import qc_rework_bp
 from routes.qc_history_user_based import qc_history_user_bp
 from routes.roster import roster_bp
 from routes.leave import leave_bp
+from routes.qa_agent_report import qa_agent_report_bp
 
 # from scheduler import start_scheduler
 from scheduler.roster_scheduler import start_scheduler
@@ -54,6 +55,7 @@ app.register_blueprint(qc_rework_bp, url_prefix="/qc_rework")
 app.register_blueprint(qc_history_user_bp, url_prefix="/qc_history_user")
 app.register_blueprint(roster_bp, url_prefix="/roster")
 app.register_blueprint(leave_bp, url_prefix="/leave")
+app.register_blueprint(qa_agent_report_bp, url_prefix="/qa_agent_report")
 
 # print("\n==== REGISTERED ROUTES ====")
 # for r in app.url_map.iter_rules():
